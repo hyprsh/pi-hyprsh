@@ -28,6 +28,7 @@ Only one extension may own the footer. `web_search` / `web_fetch` collide with `
 | **Context** | `/context` shows what occupies the model context as a proportional map; `/context injections` shows the hidden parts — base prompt, tool definitions, skills, memory files, extension additions — as a previewable tree. `↑↓`/`jk` to move, `Enter` to preview, `Z` to zoom the map, `Esc`/`q` to close. |
 | **Web** | `web_search` across OpenAI, xAI, Exa, Brave and SearXNG, and `web_fetch` with Readability/PDF extraction and SSRF checks. Raw provider results, no model-written answers, nothing persisted. |
 | **Ask** | `ask_user_question` puts up to four questions to you with 2-4 written-out options each, a free-text row and optional multi-select, instead of the model guessing. Multi-question runs are prefixed `[1/3]` so you see where you are. Built on pi's own dialogs, so it works in TUI and RPC hosts. |
+| **Thinking** | A middle ground between pi's `hideThinkingBlock` on and off: once a thinking block is finished it collapses to one line per thought — bold section headers kept whole, every other paragraph reduced to its opening sentence, list items one line each, capped at 12 lines with a `… 8 more lines` marker. Streaming reasoning is left untouched so you can still watch it live. Display-only: the full text stays in the session and in model context. Set `"thinking": { "mode": "full" }` to turn it off. |
 | **Todo** | A `todo` tool the model calls with the whole task list, a panel above the editor showing progress as `Todos (2/7)` with ✔ ▶ ○ rows, and `/todos` to print the list. Each result carries the post-call snapshot and the list is replayed from the session branch, so it survives `/reload`, forks and compaction with no disk writes. The panel caps at 12 lines — completed rows are dropped first — and disappears once everything is done. |
 | **Constitution** | [`lib/constitution/AGENTS.md`](lib/constitution/AGENTS.md) — truthfulness, safety, workflow, [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), design — appended to the system prompt each turn. Delete a duplicate `~/.pi/agent/AGENTS.md` or the rules are sent twice. |
 
@@ -40,6 +41,7 @@ Web search works with nothing configured: Exa's keyless endpoint is the fallback
 ```json
 {
   "features": { "footer": true, "reason": true, "context": true, "web": true, "constitution": true, "ask": true, "todo": true },
+  "thinking": { "mode": "summary" },
   "footer": {
     "segments": { "cwd": true, "model": true, "tps": true, "context": true, "quota": true },
     "thresholds": { "warning": 70, "critical": 90 }
@@ -98,6 +100,7 @@ lib/reason/           reason line wrapper around pi's built-in tools
 lib/context/          /context usage and /context injections views
 lib/web/              web_search and web_fetch
 lib/ask/              ask_user_question on pi's native dialogs
+lib/thinking/         condensed rendering of finished thinking blocks
 lib/todo/             todo tool, editor panel and /todos
 lib/constitution/     rules appended to the system prompt
 ```

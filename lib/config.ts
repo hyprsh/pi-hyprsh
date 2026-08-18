@@ -28,6 +28,11 @@ export interface FooterConfig {
 	thresholds: Thresholds;
 }
 
+/** `summary` keeps one line per thought; `full` leaves pi's rendering alone. */
+export interface ThinkingConfig {
+	mode: "summary" | "full";
+}
+
 export interface Config {
 	features: {
 		footer: boolean;
@@ -39,6 +44,7 @@ export interface Config {
 		todo: boolean;
 	};
 	footer: FooterConfig;
+	thinking: ThinkingConfig;
 }
 
 const DEFAULTS: Config = {
@@ -63,6 +69,9 @@ const DEFAULTS: Config = {
 			warning: 70,
 			critical: 90,
 		},
+	},
+	thinking: {
+		mode: "summary",
 	},
 };
 
@@ -111,6 +120,7 @@ export function loadConfig(path = configPath()): Config {
 	const footer = record(raw.footer);
 	const segments = record(footer?.segments) ?? {};
 	const thresholds = record(footer?.thresholds) ?? {};
+	const thinking = record(raw.thinking) ?? {};
 	return {
 		features: {
 			footer: bool(features.footer, DEFAULTS.features.footer),
@@ -133,6 +143,9 @@ export function loadConfig(path = configPath()): Config {
 				warning: percent(thresholds.warning, DEFAULTS.footer.thresholds.warning),
 				critical: percent(thresholds.critical, DEFAULTS.footer.thresholds.critical),
 			}),
+		},
+		thinking: {
+			mode: thinking.mode === "full" ? "full" : DEFAULTS.thinking.mode,
 		},
 	};
 }
