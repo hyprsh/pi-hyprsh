@@ -14,6 +14,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { compact } from "../compact/index.ts";
 
 const MAX_QUESTIONS = 4;
 const MIN_OPTIONS = 2;
@@ -164,48 +165,50 @@ async function askOne(
 }
 
 export function registerAsk(pi: ExtensionAPI): void {
-	pi.registerTool({
-		name: "ask_user_question",
-		label: "Ask User",
-		description: `Ask the user up to four questions with written-out options instead of guessing. Each question carries 2-4 labelled choices with a description of what each one means, the recommended choice first and shown as ${RECOMMENDED}; a free-text row is appended automatically, and the user can abandon the questionnaire. Answers come back as JSON.`,
-		promptSnippet:
-			"Ask the user structured questions with typed options when a decision is genuinely ambiguous.",
-		promptGuidelines: [
-			"Ask when a requirement is underspecified and a wrong guess would waste work, not to confirm what was already stated.",
-			"Group everything you need into one call of up to four questions rather than asking repeatedly.",
-			`Order the options so the one you recommend is first: it is labelled ${RECOMMENDED} in the UI. Give every option a description of what it means or what it costs.`,
-		],
-		parameters: Type.Object({
-			questions: Type.Array(QUESTION, {
-				minItems: 1,
-				maxItems: MAX_QUESTIONS,
-				description: `Between 1 and ${MAX_QUESTIONS} questions, asked one after another.`,
+	pi.registerTool(
+		compact({
+			name: "ask_user_question",
+			label: "Ask User",
+			description: `Ask the user up to four questions with written-out options instead of guessing. Each question carries 2-4 labelled choices with a description of what each one means, the recommended choice first and shown as ${RECOMMENDED}; a free-text row is appended automatically, and the user can abandon the questionnaire. Answers come back as JSON.`,
+			promptSnippet:
+				"Ask the user structured questions with typed options when a decision is genuinely ambiguous.",
+			promptGuidelines: [
+				"Ask when a requirement is underspecified and a wrong guess would waste work, not to confirm what was already stated.",
+				"Group everything you need into one call of up to four questions rather than asking repeatedly.",
+				`Order the options so the one you recommend is first: it is labelled ${RECOMMENDED} in the UI. Give every option a description of what it means or what it costs.`,
+			],
+			parameters: Type.Object({
+				questions: Type.Array(QUESTION, {
+					minItems: 1,
+					maxItems: MAX_QUESTIONS,
+					description: `Between 1 and ${MAX_QUESTIONS} questions, asked one after another.`,
+				}),
 			}),
-		}),
 
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			if (!ctx.hasUI) throw new Error("ask_user_question needs an interactive session");
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				if (!ctx.hasUI) throw new Error("ask_user_question needs an interactive session");
 
-			const questions = params.questions as Question[];
-			validate(questions);
+				const questions = params.questions as Question[];
+				validate(questions);
 
-			const answers: Answer[] = [];
-			for (const [index, question] of questions.entries()) {
-				const answer = await askOne(question, index, questions.length, ctx);
-				if (answer === undefined) {
-					return {
-						content: [{ type: "text", text: "The user cancelled the questionnaire. Ask in chat instead." }],
-						isError: true,
-						details: { cancelled: true, answers },
-					};
+				const answers: Answer[] = [];
+				for (const [index, question] of questions.entries()) {
+					const answer = await askOne(question, index, questions.length, ctx);
+					if (answer === undefined) {
+						return {
+							content: [{ type: "text", text: "The user cancelled the questionnaire. Ask in chat instead." }],
+							isError: true,
+							details: { cancelled: true, answers },
+						};
+					}
+					answers.push(answer);
 				}
-				answers.push(answer);
-			}
 
-			return {
-				content: [{ type: "text", text: JSON.stringify({ answers }, null, 2) }],
-				details: { cancelled: false, answers },
-			};
-		},
-	});
+				return {
+					content: [{ type: "text", text: JSON.stringify({ answers }, null, 2) }],
+					details: { cancelled: false, answers },
+				};
+			},
+		}),
+	);
 }

@@ -26,6 +26,7 @@ import type { Component } from "@earendil-works/pi-tui";
 import { Text } from "@earendil-works/pi-tui";
 import type { Static, TObject, TSchema } from "typebox";
 import { Type } from "typebox";
+import { compact } from "../compact/index.ts";
 
 const REASONING = Type.String({
 	description:
@@ -123,13 +124,13 @@ function wrapWithReason<TParams extends TObject, TDetails, TState>(
 
 /** Built-in tools this feature wraps, keyed by the name they are registered under. */
 const REGISTRARS: Record<string, (pi: ExtensionAPI, cwd: string) => void> = {
-	read: (pi, cwd) => pi.registerTool(wrapWithReason(createReadToolDefinition(cwd))),
-	write: (pi, cwd) => pi.registerTool(wrapWithReason(createWriteToolDefinition(cwd))),
-	edit: (pi, cwd) => pi.registerTool(wrapWithReason(createEditToolDefinition(cwd))),
-	bash: (pi, cwd) => pi.registerTool(wrapWithReason(createBashToolDefinition(cwd))),
-	grep: (pi, cwd) => pi.registerTool(wrapWithReason(createGrepToolDefinition(cwd))),
-	find: (pi, cwd) => pi.registerTool(wrapWithReason(createFindToolDefinition(cwd))),
-	ls: (pi, cwd) => pi.registerTool(wrapWithReason(createLsToolDefinition(cwd))),
+	read: (pi, cwd) => pi.registerTool(compact(wrapWithReason(createReadToolDefinition(cwd)))),
+	write: (pi, cwd) => pi.registerTool(compact(wrapWithReason(createWriteToolDefinition(cwd)))),
+	edit: (pi, cwd) => pi.registerTool(compact(wrapWithReason(createEditToolDefinition(cwd)))),
+	bash: (pi, cwd) => pi.registerTool(compact(wrapWithReason(createBashToolDefinition(cwd)))),
+	grep: (pi, cwd) => pi.registerTool(compact(wrapWithReason(createGrepToolDefinition(cwd)))),
+	find: (pi, cwd) => pi.registerTool(compact(wrapWithReason(createFindToolDefinition(cwd)))),
+	ls: (pi, cwd) => pi.registerTool(compact(wrapWithReason(createLsToolDefinition(cwd)))),
 };
 
 export function registerReason(pi: ExtensionAPI): void {

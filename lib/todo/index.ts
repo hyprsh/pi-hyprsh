@@ -9,6 +9,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { compact } from "../compact/index.ts";
 import { MAX_TODOS, parseTodos, replayTodos, STATUSES, TOOL_NAME, type Todo } from "./model.ts";
 import { formatList, panelLines } from "./render.ts";
 
@@ -64,33 +65,35 @@ export function registerTodo(pi: ExtensionAPI): void {
 		restore(ctx);
 	});
 
-	pi.registerTool({
-		name: TOOL_NAME,
-		label: "Todo",
-		description:
-			"Track the plan for a multi-step task as a visible list. Every call sends the complete list and replaces the previous one, so include unchanged tasks as they were. The list is shown to the user above their input.",
-		promptSnippet: "Keep a visible plan for multi-step work with the todo tool.",
-		promptGuidelines: [
-			"Use todo for work with several distinct steps; skip it for a single edit or question.",
-			"Send the whole list on every call, keep exactly one task in_progress, and mark it completed before starting the next.",
-		],
-		parameters: Type.Object({
-			todos: Type.Array(TODO, {
-				maxItems: MAX_TODOS,
-				description: "The complete task list, in the order it should be worked through.",
+	pi.registerTool(
+		compact({
+			name: TOOL_NAME,
+			label: "Todo",
+			description:
+				"Track the plan for a multi-step task as a visible list. Every call sends the complete list and replaces the previous one, so include unchanged tasks as they were. The list is shown to the user above their input.",
+			promptSnippet: "Keep a visible plan for multi-step work with the todo tool.",
+			promptGuidelines: [
+				"Use todo for work with several distinct steps; skip it for a single edit or question.",
+				"Send the whole list on every call, keep exactly one task in_progress, and mark it completed before starting the next.",
+			],
+			parameters: Type.Object({
+				todos: Type.Array(TODO, {
+					maxItems: MAX_TODOS,
+					description: "The complete task list, in the order it should be worked through.",
+				}),
 			}),
+
+			async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+				todos = parseTodos(params.todos);
+				requestRender();
+
+				return {
+					content: [{ type: "text", text: formatList(todos) }],
+					details: { todos },
+				};
+			},
 		}),
-
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			todos = parseTodos(params.todos);
-			requestRender();
-
-			return {
-				content: [{ type: "text", text: formatList(todos) }],
-				details: { todos },
-			};
-		},
-	});
+	);
 
 	pi.registerCommand("todos", {
 		description: "Show the current todo list",
