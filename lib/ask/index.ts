@@ -3,8 +3,9 @@
  *
  * Built on pi's own `ctx.ui.select` and `ctx.ui.input`, which work in TUI and
  * RPC hosts alike, so there is no custom component, no key routing and no host
- * fallback to maintain. Questions are asked one at a time; a multi-select
- * question loops the same selector until the user submits.
+ * fallback to maintain. Questions are asked one at a time, each prefixed with
+ * its position (`[2/3]`) when more than one was sent; a multi-select question
+ * loops the same selector until the user submits.
  *
  * The answer goes back as JSON so the model reads choices rather than prose.
  */
@@ -94,22 +95,33 @@ function validate(questions: Question[]): void {
 	}
 }
 
+/** Only shown when the questionnaire holds more than one question. */
+function progress(index: number, total: number): string {
+	return total > 1 ? `[${index + 1}/${total}] ` : "";
+}
+
 /** Undefined means the user abandoned the questionnaire. */
-async function askOne(question: Question, ctx: ExtensionContext): Promise<Answer | undefined> {
+async function askOne(
+	question: Question,
+	index: number,
+	total: number,
+	ctx: ExtensionContext,
+): Promise<Answer | undefined> {
 	const multi = question.multiSelect === true;
 	const chosen = new Set<number>();
+	const prompt = `${progress(index, total)}${question.question}`;
 
 	for (;;) {
 		const rows = question.options.map((option, index) => optionRow(index, option, chosen.has(index), multi));
 		if (multi) rows.push(SUBMIT_ROW);
 		rows.push(CUSTOM_ROW);
 
-		const title = multi ? `${question.question} (${chosen.size} chosen)` : question.question;
+		const title = multi ? `${prompt} (${chosen.size} chosen)` : prompt;
 		const picked = await ctx.ui.select(title, rows);
 		if (picked === undefined) return undefined;
 
 		if (picked === CUSTOM_ROW) {
-			const custom = await ctx.ui.input(question.question, "Your answer");
+			const custom = await ctx.ui.input(prompt, "Your answer");
 			if (custom === undefined || !custom.trim()) continue;
 			return {
 				header: question.header,
@@ -174,8 +186,8 @@ export function registerAsk(pi: ExtensionAPI): void {
 			validate(questions);
 
 			const answers: Answer[] = [];
-			for (const question of questions) {
-				const answer = await askOne(question, ctx);
+			for (const [index, question] of questions.entries()) {
+				const answer = await askOne(question, index, questions.length, ctx);
 				if (answer === undefined) {
 					return {
 						content: [{ type: "text", text: "The user cancelled the questionnaire. Ask in chat instead." }],
