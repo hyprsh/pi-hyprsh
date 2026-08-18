@@ -12,6 +12,7 @@ import { registerConstitution } from "./lib/constitution/index.ts";
 import { registerContext } from "./lib/context/index.ts";
 import { registerFooter } from "./lib/footer/index.ts";
 import { registerReason } from "./lib/reason/index.ts";
+import { registerTodo } from "./lib/todo/index.ts";
 import { registerWeb } from "./lib/web/index.ts";
 
 export default function (pi: ExtensionAPI) {
@@ -23,4 +24,5 @@ export default function (pi: ExtensionAPI) {
 	if (config.features.web) registerWeb(pi);
 	if (config.features.constitution) registerConstitution(pi);
 	if (config.features.ask) registerAsk(pi);
+	if (config.features.todo) registerTodo(pi);
 }

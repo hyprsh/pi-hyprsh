@@ -1,6 +1,6 @@
 # pi-hyprsh
 
-A [Pi](https://github.com/earendil-works/pi) extension pack: single-line footer with quota, a reason line on built-in tools, context inspection views, provider-neutral web search and fetch, and an engineering constitution in the system prompt.
+A [Pi](https://github.com/earendil-works/pi) extension pack: single-line footer with quota, a reason line on built-in tools, context inspection views, provider-neutral web search and fetch, a todo panel for the model's plan, and an engineering constitution in the system prompt.
 
 ## Install
 
@@ -17,7 +17,7 @@ pi -e .             # one run, global settings untouched
 
 No build step — Pi loads the TypeScript through jiti. Requires Node 22+ and Pi 0.84.0+.
 
-Only one extension may own the footer. `web_search` / `web_fetch` collide with `pi-web-access`, and `ask_user_question` with `@juicesharp/rpiv-ask-user-question`. Do not run those alongside this pack.
+Only one extension may own the footer. `web_search` / `web_fetch` collide with `pi-web-access`, `ask_user_question` with `@juicesharp/rpiv-ask-user-question`, and `todo` / `/todos` with `@juicesharp/rpiv-todo`. Do not run those alongside this pack.
 
 ## Features
 
@@ -28,6 +28,7 @@ Only one extension may own the footer. `web_search` / `web_fetch` collide with `
 | **Context** | `/context` shows what occupies the model context as a proportional map; `/context injections` shows the hidden parts — base prompt, tool definitions, skills, memory files, extension additions — as a previewable tree. `↑↓`/`jk` to move, `Enter` to preview, `Z` to zoom the map, `Esc`/`q` to close. |
 | **Web** | `web_search` across OpenAI, xAI, Exa, Brave and SearXNG, and `web_fetch` with Readability/PDF extraction and SSRF checks. Raw provider results, no model-written answers, nothing persisted. |
 | **Ask** | `ask_user_question` puts up to four questions to you with 2-4 written-out options each, a free-text row and optional multi-select, instead of the model guessing. Built on pi's own dialogs, so it works in TUI and RPC hosts. |
+| **Todo** | A `todo` tool the model calls with the whole task list, a panel above the editor showing progress as `Todos (2/7)` with ✔ ▶ ○ rows, and `/todos` to print the list. Each result carries the post-call snapshot and the list is replayed from the session branch, so it survives `/reload`, forks and compaction with no disk writes. The panel caps at 12 lines — completed rows are dropped first — and disappears once everything is done. |
 | **Constitution** | [`lib/constitution/AGENTS.md`](lib/constitution/AGENTS.md) — truthfulness, safety, workflow, [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), design — appended to the system prompt each turn. Delete a duplicate `~/.pi/agent/AGENTS.md` or the rules are sent twice. |
 
 Web search works with nothing configured: Exa's keyless endpoint is the fallback. A Codex or SuperGrok subscription is used before any API key.
@@ -38,7 +39,7 @@ Web search works with nothing configured: Exa's keyless endpoint is the fallback
 
 ```json
 {
-  "features": { "footer": true, "reason": true, "context": true, "web": true, "constitution": true, "ask": true },
+  "features": { "footer": true, "reason": true, "context": true, "web": true, "constitution": true, "ask": true, "todo": true },
   "footer": {
     "segments": { "cwd": true, "model": true, "tps": true, "context": true, "quota": true },
     "thresholds": { "warning": 70, "critical": 90 }
@@ -97,6 +98,7 @@ lib/reason/           reason line wrapper around pi's built-in tools
 lib/context/          /context usage and /context injections views
 lib/web/              web_search and web_fetch
 lib/ask/              ask_user_question on pi's native dialogs
+lib/todo/             todo tool, editor panel and /todos
 lib/constitution/     rules appended to the system prompt
 ```
 
@@ -104,6 +106,6 @@ Never commit `~/.pi/agent/auth.json`, API keys or OAuth tokens.
 
 ## Credits
 
-The `/context` views are ported from [`pi-context-view`](https://github.com/dimk90/pi-context-view) (MIT, Dmitry Makarov). Quota endpoints were learned from [`@juanbenjumea/pi-dynamic-footer`](https://www.npmjs.com/package/@juanbenjumea/pi-dynamic-footer) (MIT) and [`slkiser/opencode-quota`](https://github.com/slkiser/opencode-quota/pull/165).
+The todo panel follows the design of [`@juicesharp/rpiv-todo`](https://pi.dev/packages/@juicesharp/rpiv-todo) (MIT): a whole-list tool, session replay instead of disk state, and a row budget that sheds completed tasks first. The `/context` views are ported from [`pi-context-view`](https://github.com/dimk90/pi-context-view) (MIT, Dmitry Makarov). Quota endpoints were learned from [`@juanbenjumea/pi-dynamic-footer`](https://www.npmjs.com/package/@juanbenjumea/pi-dynamic-footer) (MIT) and [`slkiser/opencode-quota`](https://github.com/slkiser/opencode-quota/pull/165).
 
 MIT
