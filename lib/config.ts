@@ -35,6 +35,7 @@ export interface Config {
 		context: boolean;
 		web: boolean;
 		constitution: boolean;
+		ask: boolean;
 	};
 	footer: FooterConfig;
 }
@@ -46,6 +47,7 @@ const DEFAULTS: Config = {
 		context: true,
 		web: true,
 		constitution: true,
+		ask: true,
 	},
 	footer: {
 		segments: {
@@ -114,6 +116,7 @@ export function loadConfig(path = configPath()): Config {
 			context: bool(features.context, DEFAULTS.features.context),
 			web: bool(features.web, DEFAULTS.features.web),
 			constitution: bool(features.constitution, DEFAULTS.features.constitution),
+			ask: bool(features.ask, DEFAULTS.features.ask),
 		},
 		footer: {
 			segments: {

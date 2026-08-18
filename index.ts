@@ -6,6 +6,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerAsk } from "./lib/ask/index.ts";
 import { loadConfig } from "./lib/config.ts";
 import { registerConstitution } from "./lib/constitution/index.ts";
 import { registerContext } from "./lib/context/index.ts";
@@ -21,4 +22,5 @@ export default function (pi: ExtensionAPI) {
 	if (config.features.context) registerContext(pi);
 	if (config.features.web) registerWeb(pi);
 	if (config.features.constitution) registerConstitution(pi);
+	if (config.features.ask) registerAsk(pi);
 }
