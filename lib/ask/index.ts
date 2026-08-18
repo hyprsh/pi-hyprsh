@@ -5,7 +5,9 @@
  * RPC hosts alike, so there is no custom component, no key routing and no host
  * fallback to maintain. Questions are asked one at a time, each prefixed with
  * its position (`[2/3]`) when more than one was sent; a multi-select question
- * loops the same selector until the user submits.
+ * loops the same selector until the user submits. The first option is the one
+ * the model recommends and is labelled as such, so the recommendation is never
+ * left implicit in the ordering.
  *
  * The answer goes back as JSON so the model reads choices rather than prose.
  */
@@ -20,6 +22,8 @@ const HEADER_MAX = 16;
 
 const SUBMIT_ROW = "↵  Submit";
 const CUSTOM_ROW = "✎  Type something…";
+/** The first option is the recommended one, so the user sees which it is. */
+const RECOMMENDED = "(recommended)";
 
 interface Option {
 	label: string;
@@ -59,15 +63,16 @@ const QUESTION = Type.Object({
 	options: Type.Array(OPTION, {
 		minItems: MIN_OPTIONS,
 		maxItems: MAX_OPTIONS,
-		description: `${MIN_OPTIONS} to ${MAX_OPTIONS} distinct choices. A free-text row is appended automatically; do not author one.`,
+		description: `${MIN_OPTIONS} to ${MAX_OPTIONS} distinct choices, the one you recommend first — it is shown to the user as ${RECOMMENDED}. A free-text row is appended automatically; do not author one.`,
 	}),
 });
 
 /** Row text is what `ctx.ui.select` hands back, so every row must be unique. */
 function optionRow(index: number, option: Option, chosen: boolean, multi: boolean): string {
 	const mark = multi ? (chosen ? "✓ " : "  ") : "";
+	const label = index === 0 ? `${option.label} ${RECOMMENDED}` : option.label;
 	const description = option.description.replace(/\s+/g, " ").trim();
-	return `${index + 1}. ${mark}${option.label} — ${description}`;
+	return `${index + 1}. ${mark}${label} — ${description}`;
 }
 
 function rowIndex(row: string): number | undefined {
@@ -162,14 +167,13 @@ export function registerAsk(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "ask_user_question",
 		label: "Ask User",
-		description:
-			"Ask the user up to four questions with written-out options instead of guessing. Each question carries 2-4 labelled choices with a description of what each one means; a free-text row is appended automatically, and the user can abandon the questionnaire. Answers come back as JSON.",
+		description: `Ask the user up to four questions with written-out options instead of guessing. Each question carries 2-4 labelled choices with a description of what each one means, the recommended choice first and shown as ${RECOMMENDED}; a free-text row is appended automatically, and the user can abandon the questionnaire. Answers come back as JSON.`,
 		promptSnippet:
 			"Ask the user structured questions with typed options when a decision is genuinely ambiguous.",
 		promptGuidelines: [
 			"Ask when a requirement is underspecified and a wrong guess would waste work, not to confirm what was already stated.",
 			"Group everything you need into one call of up to four questions rather than asking repeatedly.",
-			"Give every option a description of what it means or what it costs; put a recommended option first.",
+			`Order the options so the one you recommend is first: it is labelled ${RECOMMENDED} in the UI. Give every option a description of what it means or what it costs.`,
 		],
 		parameters: Type.Object({
 			questions: Type.Array(QUESTION, {
