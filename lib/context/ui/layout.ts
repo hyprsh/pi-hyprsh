@@ -1,0 +1,96 @@
+/**
+ * Shared fullscreen-view helpers: indentation, viewport math, width fitting,
+ * hint rows and step-navigation key matching. Pure string/number logic.
+ */
+
+import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+
+/** Hint-row key label for the single-step navigation keys both views accept. */
+export const STEP_KEY_HINT = "↑↓/jk";
+
+/** Two-space indent for descriptions, counters, hints and body content. */
+export const BODY_INDENT = "  ";
+export const DEFAULT_TERMINAL_ROWS = 24;
+
+/** How many content rows fit and whether an overflow indicator is needed. */
+export interface Viewport {
+	visibleCount: number;
+	showScroll: boolean;
+}
+
+/** Divide terminal rows between content and an overflow indicator. */
+export function calculateViewport(
+	itemCount: number,
+	terminalRows: number,
+	fixedLineCount: number,
+	extraLineCount = 0,
+): Viewport {
+	const available = Math.max(1, terminalRows - fixedLineCount - extraLineCount);
+	const showScroll = itemCount > available && available > 1;
+	return { visibleCount: Math.max(1, available - (showScroll ? 1 : 0)), showScroll };
+}
+
+/** Keep emergency short-terminal output bounded while preserving both borders. */
+export function fitToTerminalHeight(lines: string[], terminalRows: number, border: string): string[] {
+	if (lines.length <= terminalRows) return lines;
+	if (terminalRows === 1) return [border];
+	return [...lines.slice(0, terminalRows - 1), border];
+}
+
+/** Normalize a terminal-height reading to a usable positive integer. */
+export function normalizeTerminalRows(rows: number): number {
+	return Number.isFinite(rows) ? Math.max(1, Math.floor(rows)) : DEFAULT_TERMINAL_ROWS;
+}
+
+/** One step backwards: Up or vim-style `k`. */
+export function isStepBackKey(data: string): boolean {
+	return matchesKey(data, Key.up) || data === "k";
+}
+
+/** One step forwards: Down or vim-style `j`. */
+export function isStepForwardKey(data: string): boolean {
+	return matchesKey(data, Key.down) || data === "j";
+}
+
+/** Truncate one rendered line to the supplied width. */
+export function fitLine(line: string, width: number): string {
+	return truncateToWidth(line, width, "…");
+}
+
+/** Wrap plain description text with semantic colour and an indented continuation column. */
+export function wrapDescriptionLines(theme: Theme, text: string, color: ThemeColor, width: number): string[] {
+	const indentWidth = Math.min(BODY_INDENT.length, Math.max(0, width - 1));
+	const indent = BODY_INDENT.slice(0, indentWidth);
+	const contentWidth = Math.max(1, width - indentWidth);
+	const wrapped = wrapTextWithAnsi(text, contentWidth);
+	return (wrapped.length === 0 ? [""] : wrapped).map((line) =>
+		truncateToWidth(theme.fg(color, `${indent}${line}`), width, ""),
+	);
+}
+
+/** Spread left and right content across the width, truncating the left side on overlap. */
+export function spreadLine(left: string, right: string, width: number): string {
+	const gap = width - visibleWidth(left) - visibleWidth(right);
+	if (gap < 1) {
+		return fitLine(
+			`${truncateToWidth(left, Math.max(1, width - visibleWidth(right) - 2), "…")} ${right}`,
+			width,
+		);
+	}
+	return `${left}${" ".repeat(gap)}${right}`;
+}
+
+/** Pi-style hint row: two-space indent, `key description` pairs joined by ` · `. */
+export function hintRow(theme: Theme, hints: ReadonlyArray<readonly [string, string]>): string {
+	const separator = theme.fg("dim", " · ");
+	return `${BODY_INDENT}${hints
+		.map(([key, description]) => theme.fg("dim", key) + theme.fg("muted", ` ${description}`))
+		.join(separator)}`;
+}
+
+/** Fill a label/value gap with dim dots, retaining spaces at both ends. */
+export function leaderLine(theme: Theme, width: number): string {
+	if (width < 3) return " ".repeat(Math.max(0, width));
+	return ` ${theme.fg("dim", ".".repeat(width - 2))} `;
+}
