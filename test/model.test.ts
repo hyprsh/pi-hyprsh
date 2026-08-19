@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { type ModelChoice, qualify, resolveAgentModel } from "../lib/agents/model.ts";
+import { CHEAPEST, type ModelChoice, qualify, resolveAgentModel } from "../lib/agents/model.ts";
 
 const CATALOGUE: ModelChoice[] = [
 	{ id: "opus", provider: "anthropic", cost: { input: 5, output: 25 } },
@@ -27,30 +27,32 @@ describe("resolveAgentModel", () => {
 	});
 
 	test("a cheap tier picks the cheapest model on the session's provider", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, undefined, CATALOGUE, SESSION);
+		const choice = resolveAgentModel({ model: CHEAPEST }, undefined, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "haiku", provider: "anthropic" });
 	});
 
 	test("a cheap tier never crosses to another provider, however cheap", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, undefined, CATALOGUE, SESSION);
+		const choice = resolveAgentModel({ model: CHEAPEST }, undefined, CATALOGUE, SESSION);
 		assert.notEqual(choice.model?.id, "grok-cheap");
 	});
 
 	test("a cheap child does not inherit the parent's thinking level", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, undefined, CATALOGUE, SESSION);
+		const choice = resolveAgentModel({ model: CHEAPEST }, undefined, CATALOGUE, SESSION);
 		assert.equal(choice.inheritThinking, false);
 	});
 
-	test("a session already on the cheapest model inherits, keeping its thinking level", () => {
+	test("a session already on the cheapest model keeps its thinking level", () => {
 		const onHaiku = { id: "haiku", provider: "anthropic" };
-		const choice = resolveAgentModel({ tier: "cheap" }, undefined, CATALOGUE, onHaiku);
-		assert.equal(choice.model, undefined);
+		const choice = resolveAgentModel({ model: CHEAPEST }, undefined, CATALOGUE, onHaiku);
+		// Landing back on the session's own model is not a downgrade, so there is
+		// nothing to protect the child from and its effort setting still applies.
+		assert.deepEqual(choice.model, onHaiku);
 		assert.equal(choice.inheritThinking, true);
 	});
 
-	test("a cheap tier inherits when the provider offers nothing priced", () => {
+	test("cheapest inherits when the provider offers nothing priced", () => {
 		const unpriced: ModelChoice[] = [{ id: "local", provider: "mesh" }];
-		const choice = resolveAgentModel({ tier: "cheap" }, undefined, unpriced, {
+		const choice = resolveAgentModel({ model: CHEAPEST }, undefined, unpriced, {
 			id: "local",
 			provider: "mesh",
 		});
@@ -63,7 +65,7 @@ describe("resolveAgentModel", () => {
 	});
 
 	test("config beats the tier", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, { model: "sonnet" }, CATALOGUE, SESSION);
+		const choice = resolveAgentModel({ model: CHEAPEST }, { model: "sonnet" }, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "sonnet", provider: "anthropic" });
 	});
 
@@ -75,7 +77,7 @@ describe("resolveAgentModel", () => {
 	});
 
 	test("an unavailable configured model does not silently fall through to the tier", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, { model: "gpt-9" }, CATALOGUE, SESSION);
+		const choice = resolveAgentModel({ model: CHEAPEST }, { model: "gpt-9" }, CATALOGUE, SESSION);
 		assert.equal(choice.model, undefined, "a typo must not be answered with a surprise model");
 		assert.equal(choice.ignored, "gpt-9");
 	});
@@ -93,7 +95,7 @@ describe("resolveAgentModel", () => {
 	});
 
 	test("whitespace-only config is not a request", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, { model: "   " }, CATALOGUE, SESSION);
+		const choice = resolveAgentModel({ model: CHEAPEST }, { model: "   " }, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "haiku", provider: "anthropic" });
 		assert.equal(choice.ignored, undefined);
 	});
@@ -106,7 +108,7 @@ describe("resolveAgentModel", () => {
 			{ id: "haiku", provider: "anthropic", cost: { input: 1, output: 5 } },
 			{ id: "haiku", provider: "cloudflare", cost: { input: 1, output: 5 } },
 		];
-		const choice = resolveAgentModel({ tier: "cheap" }, undefined, ambiguous, SESSION);
+		const choice = resolveAgentModel({ model: CHEAPEST }, undefined, ambiguous, SESSION);
 		assert.equal(qualify(choice.model as ModelChoice), "anthropic/haiku");
 	});
 
@@ -124,25 +126,14 @@ describe("resolveAgentModel", () => {
 	// Omitting --thinking gives the user's global defaultThinkingLevel, not the
 	// model's own, so an agent that wants a short leash has to say so. The two
 	// axes are independent: a cheap model does not imply cheap thinking.
-	test("an agent's declared thinking level is passed through", () => {
-		const choice = resolveAgentModel({ thinking: "low" }, undefined, CATALOGUE, SESSION);
-		assert.equal(choice.thinking, "low");
-		assert.equal(choice.inheritThinking, false);
-	});
-
-	test("a cheap tier says nothing about thinking on its own", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, undefined, CATALOGUE, SESSION);
+	test("asking for the cheapest model says nothing about thinking", () => {
+		const choice = resolveAgentModel({ model: CHEAPEST }, undefined, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "haiku", provider: "anthropic" });
 		assert.equal(choice.thinking, undefined);
 	});
 
-	test("config overrides the level the agent declared", () => {
-		const choice = resolveAgentModel(
-			{ tier: "cheap", thinking: "low" },
-			{ thinking: "medium" },
-			CATALOGUE,
-			SESSION,
-		);
+	test("a configured thinking level applies alongside a chosen model", () => {
+		const choice = resolveAgentModel({ model: CHEAPEST }, { thinking: "medium" }, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "haiku", provider: "anthropic" });
 		assert.equal(choice.thinking, "medium");
 	});
@@ -161,12 +152,12 @@ describe("resolveAgentModel", () => {
 	});
 
 	test("an empty catalogue inherits rather than throwing", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, { model: "haiku" }, [], SESSION);
+		const choice = resolveAgentModel({ model: CHEAPEST }, { model: "haiku" }, [], SESSION);
 		assert.equal(choice.model, undefined);
 	});
 
 	test("no session means no provider to be cheap on", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, undefined, CATALOGUE, undefined);
+		const choice = resolveAgentModel({ model: CHEAPEST }, undefined, CATALOGUE, undefined);
 		assert.equal(choice.model, undefined);
 	});
 
@@ -175,9 +166,9 @@ describe("resolveAgentModel", () => {
 			{ id: "b-model", provider: "anthropic", cost: { input: 1, output: 1 } },
 			{ id: "a-model", provider: "anthropic", cost: { input: 1, output: 1 } },
 		];
-		assert.equal(resolveAgentModel({ tier: "cheap" }, undefined, tied, SESSION).model?.id, "a-model");
+		assert.equal(resolveAgentModel({ model: CHEAPEST }, undefined, tied, SESSION).model?.id, "a-model");
 		assert.equal(
-			resolveAgentModel({ tier: "cheap" }, undefined, [...tied].reverse(), SESSION).model?.id,
+			resolveAgentModel({ model: CHEAPEST }, undefined, [...tied].reverse(), SESSION).model?.id,
 			"a-model",
 		);
 	});

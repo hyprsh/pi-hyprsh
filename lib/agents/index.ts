@@ -10,7 +10,7 @@
 
 export { type AgentDefinition, agentDefinitions, findAgent } from "./definitions.ts";
 export {
-	type AgentTier,
+	CHEAPEST,
 	type ModelChoice,
 	type ModelRef,
 	qualify,

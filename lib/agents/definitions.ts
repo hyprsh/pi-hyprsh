@@ -16,14 +16,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
-import {
-	type AgentTier,
-	isThinkingLevel,
-	isTier,
-	THINKING_LEVELS,
-	type ThinkingLevel,
-	TIERS,
-} from "./model.ts";
 
 const DIR = join(import.meta.dirname, "definitions");
 
@@ -35,12 +27,12 @@ export interface AgentDefinition {
 	description: string;
 	/** Allowlist passed to the child as --tools. */
 	tools: string[];
-	/** Absent means the child inherits the dispatching session's model and thinking level. */
+	/**
+	 * A model ID, `provider/id`, or `cheapest`. Absent means the child inherits
+	 * the dispatching session's model. Resolved against the live registry at
+	 * dispatch, never at load, because availability depends on auth.
+	 */
 	model?: string;
-	/** Intention rather than an ID: resolved against the live registry at dispatch. */
-	tier?: AgentTier;
-	/** How hard this agent thinks, independent of which model it lands on. */
-	thinking?: ThinkingLevel;
 	systemPrompt: string;
 }
 
@@ -49,8 +41,6 @@ type Frontmatter = {
 	description?: unknown;
 	tools?: unknown;
 	model?: unknown;
-	tier?: unknown;
-	thinking?: unknown;
 };
 
 /** Both spellings are valid YAML and both appear in agent files elsewhere. */
@@ -73,28 +63,12 @@ function parse(file: string, source: string): AgentDefinition {
 	if (!name) throw new Error(`agent definition ${file} has no name`);
 	if (!description) throw new Error(`agent definition ${file} has no description`);
 	if (tools.length === 0) throw new Error(`agent definition ${file} has no usable tools`);
-	// A misspelled tier would silently cost the user money on the parent's model,
-	// which is the failure this whole feature exists to remove.
-	if (frontmatter?.tier !== undefined && !isTier(frontmatter.tier)) {
-		throw new Error(
-			`agent definition ${file} has tier ${String(frontmatter.tier)}, expected one of ${TIERS.join(", ")}`,
-		);
-	}
-	// A level pi does not know is refused by the child at startup, so it would kill
-	// every dispatch of this agent rather than degrade one.
-	if (frontmatter?.thinking !== undefined && !isThinkingLevel(frontmatter.thinking)) {
-		throw new Error(
-			`agent definition ${file} has thinking ${String(frontmatter.thinking)}, expected one of ${THINKING_LEVELS.join(", ")}`,
-		);
-	}
 
 	return {
 		name,
 		description,
 		tools,
 		model: typeof frontmatter?.model === "string" ? frontmatter.model.trim() : undefined,
-		tier: isTier(frontmatter?.tier) ? frontmatter.tier : undefined,
-		thinking: isThinkingLevel(frontmatter?.thinking) ? frontmatter.thinking : undefined,
 		systemPrompt: body.trim(),
 	};
 }

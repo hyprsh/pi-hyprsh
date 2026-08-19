@@ -50,25 +50,32 @@ instead.
 
 ## 3. Cheap models for cheap agents — *done*
 
-`lib/agents/model.ts` resolves a child's model: an `agents.models` entry in
-`pi-hyprsh.json` wins, then a `model` in the definition's frontmatter, then a
-`tier: cheap` resolved to the least expensive model the registry reports as
-available *on the session's own provider*, then inheriting. Anything named but
-unavailable is dropped in favour of inheriting, so a config written for one
-provider cannot break dispatch on another.
+`lib/agents/model.ts` resolves a child's model from one field: an
+`agents.models` entry in `pi-hyprsh.json` wins, otherwise the `model` line in
+the definition's frontmatter. The value is a model ID, a `provider/id`, or
+`cheapest`, which resolves to the least expensive model the registry reports as
+available *on the session's own provider*. Anything named but unavailable is
+dropped in favour of inheriting, so a config written for one provider cannot
+break dispatch on another.
 
-`scout` declares `tier: cheap`; `reviewer` and `worker` deliberately do not.
+`scout` declares `model: cheapest`; `reviewer` and `worker` deliberately name
+nothing. An earlier cut had a separate `tier: cheap` field, which was one
+vocabulary too many for what is just a model name.
 
-How hard an agent thinks is a separate axis, declared in its own frontmatter
-(`thinking: low` on `scout`) and overridable with `agents.thinking`. It is not
-derived from the model being cheap: the two are independent, and tying them
-would have been a layer with nothing in it.
+Thinking level is a separate axis, settable only in config via
+`agents.thinking`. **No default ships, and the reason is measured.** An earlier
+commit claimed a child left at `high` "spends the saving straight back". That
+was asserted, not tested, and it is wrong: `budget_tokens` is a ceiling rather
+than a target, and the same scout task used 311 reasoning tokens at `low`
+against 328 at `high`, both an order of magnitude under either cap. The `low`
+runs also took 3-4 turns against 2 and cost more overall, which hints the
+shorter leash is paid for in extra tool calls — n=2 per arm, so a hypothesis,
+not a finding.
 
-Stating the level is what matters. A live dispatch showed the first cut was
-wrong: omitting `--thinking` does not give the model's own default, it gives
-the user's global `defaultThinkingLevel`. The scout ran on `claude-haiku-4-5`
-and still reasoned at `high`, spending the saving straight back. Found only
-because the child was asked to report its own `PI_*` environment.
+What the live dispatch did establish is that omitting `--thinking` hands the
+child the user's global `defaultThinkingLevel`, not the model's own. That is
+worth knowing and worth being able to override; it is not worth a shipped
+opinion.
 
 Measured on an `anthropic/claude-opus-5` session: the tier picks
 `claude-haiku-4-5`, which is 5× cheaper on both input and output. A direct

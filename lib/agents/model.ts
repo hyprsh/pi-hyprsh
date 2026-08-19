@@ -10,9 +10,11 @@
  * anything that does not match is dropped in favour of inheriting, which is
  * always safe because the parent is by definition running on it.
  *
- * `tier` exists so the definitions can ship an intention rather than an ID.
- * `cheap` means "the least expensive model on whatever provider this session is
- * already using", which is portable in a way that `claude-haiku-4-5` is not.
+ * `cheapest` is a model name in the same field as any other, and means "the
+ * least expensive model on whatever provider this session is already using".
+ * A definition needs that because a literal ID is not portable: shipping
+ * `claude-haiku-4-5` helps anthropic users and silently does nothing for
+ * everyone else.
  *
  * Everything chosen here leaves as `provider/id`, never a bare ID. 221 of the
  * 1267 models pi ships are offered by more than one provider, `claude-haiku-4-5`
@@ -22,14 +24,8 @@
  * is precisely the spawn failure this module exists to prevent.
  */
 
-/** Absent means inherit. Only one tier exists because only one is useful so far. */
-export type AgentTier = "cheap";
-
-export const TIERS: readonly AgentTier[] = ["cheap"];
-
-export function isTier(value: unknown): value is AgentTier {
-	return typeof value === "string" && (TIERS as readonly string[]).includes(value);
-}
+/** Asks for the least expensive model on the session's provider, wherever a model name is accepted. */
+export const CHEAPEST = "cheapest";
 
 /** The part of pi-ai's `Model` needed to choose one; real models satisfy it structurally. */
 export interface ModelChoice {
@@ -39,17 +35,8 @@ export interface ModelChoice {
 }
 
 export interface AgentModelRequest {
-	/** Explicit model from the agent definition's frontmatter. */
+	/** A model ID, `provider/id`, or `cheapest`. Absent means inherit. */
 	model?: string;
-	tier?: AgentTier;
-	/**
-	 * How hard this agent should think, from its own frontmatter.
-	 *
-	 * Independent of which model it runs on: recon wants a short leash whether it
-	 * is on the cheapest model or the parent's. Left unset, the child gets the
-	 * user's global `defaultThinkingLevel`, which is pi's own behaviour.
-	 */
-	thinking?: ThinkingLevel;
 }
 
 /** Provider and ID together, because an ID alone does not identify a model. */
@@ -116,34 +103,32 @@ export function resolveAgentModel(
 	available: readonly ModelChoice[],
 	session: { id?: string; provider?: string } | undefined,
 ): Resolution {
-	// Applies whatever the model turns out to be, including a child that inherits
-	// it: how hard to think and which model to think with are separate questions.
-	const thinking = override?.thinking ?? request.thinking;
+	// Set independently of the model: how hard to think and which model to think
+	// with are separate questions, and only the user answers this one.
+	const thinking = override?.thinking;
 	const withThinking = (resolution: Resolution): Resolution =>
 		thinking ? { ...resolution, thinking, inheritThinking: false } : resolution;
 
 	const requested = override?.model?.trim() || request.model?.trim();
-	if (requested) {
-		// `provider/id` is accepted as well as a bare ID, so a user who has already
-		// hit the ambiguity can spell their way out of it in config.
-		const match = available.find((model) => model.id === requested || qualify(model) === requested);
-		if (!match) return withThinking({ ...INHERIT, ignored: requested });
-		return withThinking({
-			model: { id: match.id, provider: match.provider },
-			inheritThinking: match.id === session?.id && match.provider === session?.provider,
-		});
+	if (!requested) return withThinking(INHERIT);
+
+	const pick =
+		requested === CHEAPEST
+			? session?.provider
+				? cheapest(available, session.provider)
+				: undefined
+			: // `provider/id` is accepted as well as a bare ID, so a user who has
+				// already hit the ambiguity can spell their way out of it in config.
+				available.find((model) => model.id === requested || qualify(model) === requested);
+
+	// `cheapest` naming nothing is not a mistake worth reporting: it means this
+	// provider prices nothing, and inheriting is the right answer.
+	if (!pick) {
+		return withThinking(requested === CHEAPEST ? INHERIT : { ...INHERIT, ignored: requested });
 	}
 
-	if (request.tier === "cheap" && session?.provider) {
-		const pick = cheapest(available, session.provider);
-		// Already on the cheapest model: inherit, so the session's thinking level survives.
-		if (pick && pick.id !== session.id) {
-			return withThinking({
-				model: { id: pick.id, provider: pick.provider },
-				inheritThinking: false,
-			});
-		}
-	}
-
-	return withThinking(INHERIT);
+	return withThinking({
+		model: { id: pick.id, provider: pick.provider },
+		inheritThinking: pick.id === session?.id && pick.provider === session?.provider,
+	});
 }

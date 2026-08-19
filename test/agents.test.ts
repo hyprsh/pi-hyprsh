@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Usage } from "@earendil-works/pi-ai";
 import { agentDefinitions } from "../lib/agents/definitions.ts";
+import { CHEAPEST } from "../lib/agents/model.ts";
 import { readVerdict, stripVerdict } from "../lib/agents/run.ts";
 import { type AgentRun, addUsage, emptyUsage, succeeded } from "../lib/agents/types.ts";
 
@@ -121,10 +122,11 @@ describe("agentDefinitions", () => {
 		assert.deepEqual([...names].sort(), ["reviewer", "scout", "worker"]);
 	});
 
-	test("scout asks for a cheap model; the writing agent does not", () => {
-		const tiers = Object.fromEntries(agentDefinitions().map((agent) => [agent.name, agent.tier]));
-		assert.equal(tiers.scout, "cheap");
-		assert.equal(tiers.worker, undefined, "a weaker model must not be writing the code");
+	test("scout asks for the cheapest model; the writing agent does not", () => {
+		const models = Object.fromEntries(agentDefinitions().map((agent) => [agent.name, agent.model]));
+		assert.equal(models.scout, CHEAPEST);
+		assert.equal(models.worker, undefined, "a weaker model must not be writing the code");
+		assert.equal(models.reviewer, undefined, "a weaker model must not be judging the work");
 	});
 
 	test("worker is the only agent that writes", () => {
