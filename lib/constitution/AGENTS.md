@@ -23,7 +23,7 @@ read away from being skipped.
 
 ## Going deeper
 
-For anything beyond a trivial change, load the `hyprsh-mode` skill. It carries
+For anything beyond a trivial change, load the `hyprmode` skill. It carries
 the working method: playbooks for investigation, bug fixes, features,
 refactoring and prototypes, the design and architecture principles, the
 delegation rules, and the commit format. Read the principle before you cite it,

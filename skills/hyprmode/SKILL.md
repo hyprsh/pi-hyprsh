@@ -1,9 +1,9 @@
 ---
-name: hyprsh-mode
+name: hyprmode
 description: The working method for non-trivial engineering work. Routes a task to a playbook (investigation, bug fix, feature, refactoring, prototype) and indexes the design, architecture, verification and delegation principles. Use for any change that is not a one-line edit or a direct question.
 ---
 
-# hyprsh mode
+# hyprmode
 
 The always-on constitution says what you must never do. This says how to work.
 
