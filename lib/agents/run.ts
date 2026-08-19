@@ -55,14 +55,15 @@ function piInvocation(args: string[]): { command: string; args: string[] } {
 	return { command: "pi", args };
 }
 
-function readVerdict(report: string): ReportedVerdict {
+/** A child that stated no verdict reports `unknown`, which is not the same as a failure. */
+export function readVerdict(report: string): ReportedVerdict {
 	const match = VERDICT_LINE.exec(report);
 	if (!match?.[1]) return "unknown";
 	return match[1].toLowerCase() as ReportedVerdict;
 }
 
 /** The verdict line is a protocol marker, not part of what the caller reads. */
-function stripVerdict(report: string): string {
+export function stripVerdict(report: string): string {
 	return report.replace(VERDICT_LINE, "").trimEnd();
 }
 

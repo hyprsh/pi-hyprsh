@@ -25,7 +25,8 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",
 		"format": "biome check --write .",
-		"check": "npm run lint && npm run typecheck"
+		"test": "node --experimental-strip-types --test \"test/**/*.test.ts\"",
+		"check": "npm run lint && npm run typecheck && npm test"
 	},
 	"pi": {
 		"extensions": [

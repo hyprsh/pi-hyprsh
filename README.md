@@ -95,7 +95,8 @@ Known gaps and the next pieces of work are in [`BACKLOG.md`](BACKLOG.md).
 
 ```bash
 npm install
-npm run check       # biome + tsc --noEmit
+npm run check       # biome + tsc --noEmit + node --test
+npm test            # just the tests
 npm run format
 ```
 
@@ -115,6 +116,7 @@ lib/ask/              ask_user_question on pi's native dialogs
 lib/thinking/         condensed rendering of finished thinking blocks
 lib/todo/             todo tool, editor panel and /todos
 lib/constitution/     rules appended to the system prompt
+test/                 node:test suites, run by npm test
 ```
 
 Never commit `~/.pi/agent/auth.json`, API keys or OAuth tokens.
