@@ -6,33 +6,30 @@ Status of the previous round: the subagent runtime, the `task` tool, the
 `hyprmode` skill, the constitution kernel and the web provider set all shipped
 and were verified by hand. What follows is what that round left behind.
 
+Since then: a test suite and CI exist (item 1, partly), and writing children are
+serialised rather than given worktrees (the decision at the end).
+
 ---
 
-## 1. Regression protection
+## 1. Regression protection — *started*
 
-**No automated tests exist.** No framework, no `test` script, no CI. Every check
-so far was a throwaway probe, run once, observed, deleted.
+**Shipped.** `npm test` runs `node --test` with no new dependency, `npm run
+check` now ends in it, and `.github/workflows/check.yml` runs the lot on Node
+24. 39 tests cover `lib/task/brief.ts`, `lib/task` dispatch and `lib/agents`.
+Two were mutation-checked rather than merely observed green: breaking `overlaps`
+to a bare `startsWith`, and un-serialising the writers, each turned exactly one
+test red.
 
-That leaves pure functions with genuinely tricky edge cases protected by
-nothing:
+**Still uncovered:**
 
 | Function | The case that will break silently |
 |---|---|
-| `lib/task/brief.ts` `overlaps` | `lib/ab` vs `lib/abc` must *not* conflict; `lib/` vs `lib/a.ts` must |
-| `lib/task/brief.ts` `conflicts` | duplicate names, writable paths given to a read-only agent |
-| `lib/agents/run.ts` verdict parsing | the `VERDICT:` line is found, case-insensitive, and stripped from the report |
-| `lib/agents/types.ts` `addUsage` | totals and nested `cost` both accumulate |
 | `lib/todo/model.ts` `parseTodos` | a skip with no reason, or a whitespace-only one, is rejected |
 | `lib/web/config.ts` validation | a bad key throws naming the offending path |
+| `lib/agents/run.ts` `recordEvidence` | `file_path` and `path` both count as a change; `bash` records the command |
+| `lib/task/render.ts` `panelLines` | never rendered, never asserted (see item 4) |
 
-Node 22 has a built-in runner, so this needs no new dependency:
-`node --test --experimental-strip-types`. Add `npm test`, wire it into
-`npm run check`, and add a GitHub Actions workflow that runs it.
-
-Start with `lib/task/brief.ts` and `lib/agents`, which are the newest and the
-least exercised.
-
-**Size:** ~200 lines of test, plus a workflow file.
+**Size:** ~80 lines of test.
 
 ---
 
@@ -162,22 +159,24 @@ filesystem level stops a child writing anywhere.
 - **The exposure is narrow.** It only matters for two or more `worker` units in
   a single call, which is not the common case.
 
-### Recommendation
+### Recommendation — *serialised writers shipped*
 
-**Do not build worktrees yet. Serialise writers instead.**
+**Worktrees are not built. Writers are serialised instead.**
 
-If a dispatch never runs two writing children at once, the shared tree is safe
-for the same reason single-threaded code needs no locks, and it costs about five
-lines: partition the briefs by whether the agent can write, run read-only units
-concurrently as now, and run writers one after another.
+`dispatchPhased` in `lib/task/index.ts` runs read-only units together as before,
+then writing units one at a time, keeping the caller's order in the results. A
+writer therefore never observes a sibling's half-finished edits, and
+`npm run check` still works because nothing moved out of the session's tree.
+Eight tests in `test/dispatch.test.ts` assert it against a recorded timeline
+rather than against wall-clock timing.
 
-That removes the actual hazard immediately, keeps `npm run check` working, and
-costs wall-clock only on multi-writer fan-outs, which are rare. Revisit
-worktrees if and when multi-writer parallelism proves it matters — and treat it
-then as the environment-provisioning project it really is, not a git flag.
+Only `worker` writes, so nothing changes for a `scout` or `reviewer` fan-out —
+asserted in `test/agents.test.ts` so a new writing agent cannot be added without
+noticing. The cost is wall clock on multi-writer dispatches, which are rare.
 
-**Size:** ~5 lines for serialised writers. Worktrees remain a real feature:
-install automation per tree, uncommitted-state handling, integration and
+Revisit worktrees if and when multi-writer parallelism proves it matters — and
+treat it then as the environment-provisioning project it really is, not a git
+flag: install automation per tree, uncommitted-state handling, integration and
 cleanup.
 
 ### Would pnpm help?
