@@ -1,7 +1,7 @@
 /**
  * Configuration for the web feature.
  *
- * Read from the `web` section of ~/.pi/agent/pi-hyprsh.json. Unlike the rest of
+ * Read from the `web` section of ~/.pi/agent/hypr/config.json. Unlike the rest of
  * this package, malformed values are not silently replaced by defaults: a bad
  * value here would otherwise send a request nobody asked for. Validation throws
  * with the offending key, and the tools surface that as a tool error rather

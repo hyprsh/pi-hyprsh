@@ -43,7 +43,7 @@ The default order is by measured latency, since `auto` takes the first provider 
 
 ## Configuration
 
-`~/.pi/agent/pi-hyprsh.json`. Everything is optional and every feature is on by default.
+`~/.pi/agent/hypr/config.json`. Everything is optional and every feature is on by default.
 
 ```json
 {

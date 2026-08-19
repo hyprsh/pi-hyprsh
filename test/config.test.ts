@@ -10,18 +10,24 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { loadConfig } from "../lib/config.ts";
+import { configPath, loadConfig } from "../lib/config.ts";
 
 function configFile(contents: string): string {
 	const dir = mkdtempSync(join(tmpdir(), "hyprsh-config-"));
-	const path = join(dir, "pi-hyprsh.json");
+	const path = join(dir, "config.json");
 	writeFileSync(path, contents, "utf-8");
 	return path;
 }
 
+describe("configPath", () => {
+	test("lives in the hypr directory inside pi's config folder", () => {
+		assert.match(configPath(), /[/\\]hypr[/\\]config\.json$/);
+	});
+});
+
 describe("loadConfig", () => {
 	test("a missing file gives defaults rather than throwing", () => {
-		const config = loadConfig(join(tmpdir(), "hyprsh-does-not-exist", "pi-hyprsh.json"));
+		const config = loadConfig(join(tmpdir(), "hyprsh-does-not-exist", "config.json"));
 		assert.equal(config.features.task, true);
 		assert.deepEqual(config.agents.models, {});
 	});

@@ -1,7 +1,7 @@
 /**
  * pi-hyprsh — Pi extension pack for this environment.
  *
- * Features are toggled in ~/.pi/agent/pi-hyprsh.json. Everything is on by
+ * Features are toggled in ~/.pi/agent/hypr/config.json. Everything is on by
  * default.
  */
 

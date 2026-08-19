@@ -1,8 +1,11 @@
 /**
  * Configuration for pi-hyprsh.
  *
- * Read from ~/.pi/agent/pi-hyprsh.json. Missing, unreadable and malformed
+ * Read from ~/.pi/agent/hypr/config.json. Missing, unreadable and malformed
  * files all fall back to defaults rather than breaking pi startup.
+ *
+ * `hypr` is this pack's own directory inside pi's agent folder, so everything
+ * it keeps on disk is in one place a user can find, list and delete.
  */
 
 import { readFileSync } from "node:fs";
@@ -102,8 +105,13 @@ export function agentDir(): string {
 	return process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), ".pi", "agent");
 }
 
+/** This pack's own directory inside pi's config folder. */
+export function hyprDir(): string {
+	return join(agentDir(), "hypr");
+}
+
 export function configPath(): string {
-	return join(agentDir(), "pi-hyprsh.json");
+	return join(hyprDir(), "config.json");
 }
 
 function bool(value: unknown, fallback: boolean): boolean {
