@@ -1,6 +1,6 @@
 # pi-hyprsh
 
-A [Pi](https://github.com/earendil-works/pi) extension pack: single-line footer with quota, a reason line on built-in tools, context inspection views, provider-neutral web search and fetch, a todo panel for the model's plan, and an engineering constitution in the system prompt.
+A [Pi](https://github.com/earendil-works/pi) extension pack: single-line footer with quota, a reason and timing header on tool calls, context inspection views, provider-neutral web search and fetch, a todo panel for the model's plan, and an engineering constitution in the system prompt.
 
 ## Install
 
@@ -24,8 +24,8 @@ Only one extension may own the footer. `web_search` / `web_fetch` collide with `
 | Feature | What you get |
 |---|---|
 | **Footer** | One line: cwd, model:thinking, tokens/s, context %, and subscription quota per window with a live reset countdown. On a narrow terminal the line wraps at segment boundaries rather than losing its tail. Anthropic, OpenAI Codex and xAI are read from your existing sign-in. Percentages turn amber at 70 and bold red at 90. |
-| **Reason** | Every built-in tool takes a required `reasoning` argument, rendered as one line above the call. Result rendering, diffs and `ctrl+o` stay native. |
-| **Compact** | Every tool this pack registers renders its own frame instead of pi's padded box, dropping the two blank lines around each call — a read is three lines: separator, reason, call. The one-column indent and the pending/success/error tint are kept, and the call line ends in how long the call took (`0.2s`). |
+| **Reason** | Every built-in tool, plus `web_search`, `web_fetch` and `ask_user_question`, takes a required `reasoning` argument, stripped again before the call runs. Execution, result rendering, diffs and `ctrl+o` stay native. `todo` is exempt: the list itself says what it is for. |
+| **Compact** | Every tool this pack registers renders its own frame instead of pi's padded box, dropping the two blank lines around each call — a read is two lines: header, call. Above the call sits one header line, `[bash] Confirm the editor is free -> 0.3s done`: tool name, reason, and state — `-> running` while `execute` is in flight, `-> 0.3s done` or `-> 0.3s error` once it returns, nothing at all for a call replayed from a session, which never ran here. The one-column indent and the pending/success/error tint are kept, and bash's own `Took 0.3s` trailer is dropped since the header already carries it. |
 | **Context** | `/context` shows what occupies the model context as a proportional map; `/context injections` shows the hidden parts — base prompt, tool definitions, skills, memory files, extension additions — as a previewable tree. `↑↓`/`jk` to move, `Enter` to preview, `Z` to zoom the map, `Esc`/`q` to close. |
 | **Web** | `web_search` across OpenAI, xAI, Exa, Brave and SearXNG, and `web_fetch` with Readability/PDF extraction and SSRF checks. Raw provider results, no model-written answers, nothing persisted. |
 | **Ask** | `ask_user_question` puts up to four questions to you with 2-4 written-out options each — the recommended one first and labelled `(recommended)` — a free-text row and optional multi-select, instead of the model guessing. Multi-question runs are prefixed `[1/3]` so you see where you are. Built on pi's own dialogs, so it works in TUI and RPC hosts. |
@@ -97,8 +97,8 @@ index.ts              entry, registers enabled features
 lib/config.ts         feature flags
 lib/footer/           setFooter component and segment renderers
 lib/quota/            per-provider subscription usage
-lib/reason/           reason line wrapper around pi's built-in tools
-lib/compact/          compact call framing shared by every tool in the pack
+lib/reason/           the reasoning argument added to every wrapped tool
+lib/compact/          call framing and header line, shared by every tool in the pack
 lib/context/          /context usage and /context injections views
 lib/web/              web_search and web_fetch
 lib/ask/              ask_user_question on pi's native dialogs
