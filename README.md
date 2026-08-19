@@ -91,6 +91,8 @@ Config values may be a literal or a `$VAR` / `${VAR}` reference; each also falls
 
 ## Development
 
+Known gaps and the next pieces of work are in [`BACKLOG.md`](BACKLOG.md).
+
 ```bash
 npm install
 npm run check       # biome + tsc --noEmit
