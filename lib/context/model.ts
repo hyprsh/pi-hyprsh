@@ -5,6 +5,8 @@
  * view code never parses labels to recover source, kind or parentage.
  */
 
+import type { DelegatedUsage } from "../task/delegated.ts";
+
 export const PI_SOURCE_ID = "pi";
 export const AGGREGATE_SOURCE_ID = "aggregate:extensions";
 
@@ -110,6 +112,12 @@ export interface ContextUsageSnapshot {
 	readonly estimatedTokens: number;
 	/** Auto-compaction reserve; absent when auto-compaction is disabled. */
 	readonly autoCompactReserveTokens?: number;
+	/**
+	 * What delegated children read elsewhere. Outside `categories` and outside
+	 * `estimatedTokens` on purpose: the map's proportions describe this window,
+	 * and these tokens were never in it.
+	 */
+	readonly delegated?: DelegatedUsage;
 }
 
 /**

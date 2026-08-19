@@ -20,6 +20,7 @@ function run(overrides: Partial<AgentRun> = {}): AgentRun {
 		report: "found it",
 		evidence: { changed: [], commands: ["ls"] },
 		usage: emptyUsage(),
+		contextTokens: 0,
 		turns: 1,
 		exitCode: 0,
 		ms: 1200,
@@ -30,6 +31,15 @@ function run(overrides: Partial<AgentRun> = {}): AgentRun {
 const NONE = new Set<string>();
 
 describe("formatRuns", () => {
+	test("names the window the child carried, so the saving is legible where it was made", () => {
+		assert.match(formatRuns([run({ contextTokens: 47_320 })], NONE), /pass in 1\.2s, 47\.3k context\n/);
+		assert.match(formatRuns([run({ contextTokens: 640 })], NONE), /pass in 1\.2s, 640 context\n/);
+	});
+
+	test("says nothing about context when the child died before reporting any", () => {
+		assert.doesNotMatch(formatRuns([run({ contextTokens: 0 })], NONE), /context/);
+	});
+
 	test("stays quiet when the child ran on the session's model", () => {
 		const text = formatRuns([run({ model: "anthropic/opus" })], NONE, "anthropic/opus");
 		assert.match(text, /### Look \(scout\) — pass in 1\.2s\n/);

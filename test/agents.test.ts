@@ -31,6 +31,7 @@ function run(overrides: Partial<AgentRun> = {}): AgentRun {
 		report: "done",
 		evidence: { changed: [], commands: [] },
 		usage: emptyUsage(),
+		contextTokens: 0,
 		turns: 1,
 		exitCode: 0,
 		ms: 10,

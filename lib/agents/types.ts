@@ -41,6 +41,14 @@ export interface AgentRun {
 	/** Observed. */
 	evidence: Evidence;
 	usage: Usage;
+	/**
+	 * The child's own context at its last turn, by pi's `calculateContextTokens`.
+	 *
+	 * Not a slice of `usage`, which sums every turn and so counts a resent
+	 * conversation once per turn. This is the size of the window the child was
+	 * carrying when it finished: the reading that never entered this session.
+	 */
+	contextTokens: number;
 	turns: number;
 	exitCode: number;
 	ms: number;

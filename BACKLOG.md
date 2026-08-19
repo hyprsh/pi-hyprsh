@@ -57,18 +57,40 @@ than a unit test's.
 
 ---
 
-## 2. Close the delegation loop in `/context`
+## 2. Close the delegation loop in `/context` — *done*
 
-The argument for subagents is `guard-the-context-window`, and this is the only
-pack that can *show* that window rather than assert about it. But `task` reports
-nothing about what delegation saved, so the loop the design opened is still
-open.
+An `AgentRun` now carries `contextTokens`: the child's own context at its last
+turn, via pi's `calculateContextTokens`. `/context usage` prints one line above
+the map — *N delegated units: X read elsewhere, Y returned here — R× kept out of
+this window* — and the run header in a `task` result names each child's window
+beside its time.
 
-Make a `task` result carry the child's context usage, and have `/context`
-attribute it: how much stayed out of this window because a child read it
-instead.
+The metric is the last turn's usage rather than a sum, and that choice is
+measured rather than assumed. A real child spawned by hand
+(`pi --mode json -p --no-session --tools read,ls`) over two turns reported a
+**summed input of 4 tokens** against a last-turn `totalTokens` of **2808**
+(input 2, output 10, cacheRead 1897, cacheWrite 899). Summing `input` across
+turns measures cache behaviour, not context; `calculateContextTokens` on the
+last message is what pi itself uses and is the only figure that means anything.
 
-**Size:** small in `lib/task`, moderate in `lib/context`.
+The count is a replay of `task` results off the session branch, like
+`replayTodos`, so it survives /reload, forks and compaction with no disk writes.
+Delegated tokens are deliberately **not** a map category and are excluded from
+`estimatedTokens`: the map's cells are proportions of this window, and these
+tokens were never in it. Both sides are always shown — a saving reported without
+what it cost to return would be the same overclaim the pack exists to prevent.
+
+**Not done:** the line has never been seen rendered. `formatDelegated` and
+`replayDelegated` have 11 tests, and `computeUsage` is asserted to carry the
+figure without letting it into the window's own total, but the TUI dashboard
+itself is still in item 4's territory.
+
+**Found while verifying, unrelated and not fixed:** calling `runAgent` from a
+standalone script fork-bombs. `piInvocation` re-execs `process.argv[1]`, which
+is pi's own entry inside a session but the *probe script* outside one, so every
+child re-runs the probe. It is inherited from pi's subagent example and is
+harmless in the only path that ships, but it makes `runAgent` untestable from a
+script and would bite anyone who tried.
 
 ---
 
@@ -132,6 +154,8 @@ Carried forward honestly. None of these are known broken; none are known good.
 
 - The `task` TUI panel (`lib/task/render.ts` `panelLines`) has never been seen
   rendered. Print mode has no widgets.
+- The delegated-attribution line in `/context usage` has never been seen
+  rendered either, for the same reason.
 - The quota gate's refusal branch has never fired against a real
   near-exhausted allowance.
 - The agents abort path is wired to `signal` but never exercised.

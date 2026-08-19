@@ -15,6 +15,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
+import { replayDelegated } from "../task/delegated.ts";
 import { buildNativeSnapshot, CaptureState, mergeContextOnlyMessages } from "./capture.ts";
 import { showInjectionsView } from "./ui/injections-view.ts";
 import { showUsageView } from "./ui/usage-view.ts";
@@ -83,6 +84,10 @@ export function registerContext(pi: ExtensionAPI): void {
 					reported: toReportedUsage(ctx.getContextUsage()),
 					modelLabel: ctx.model?.id,
 					autoCompactReserveTokens: autoCompactReserveTokens(ctx),
+					// Entries rather than the built messages, as replayTodos does: a
+					// dispatch that compaction has since summarised away still kept its
+					// reading out of this window, so it still counts.
+					delegated: replayDelegated(ctx.sessionManager.getEntries()),
 				}),
 				degradedReason,
 			});

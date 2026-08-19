@@ -19,6 +19,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { AssistantMessage, Usage } from "@earendil-works/pi-ai";
+import { calculateContextTokens } from "@earendil-works/pi-coding-agent";
 import type { AgentDefinition } from "./definitions.ts";
 import { type AgentRun, addUsage, type Evidence, emptyUsage, type ReportedVerdict } from "./types.ts";
 
@@ -104,6 +105,9 @@ export async function runAgent(
 	const model = options.model;
 
 	let usage: Usage = emptyUsage();
+	// The last turn's own usage, kept apart from the running total: pi derives a
+	// context size from one message's usage, never from a sum across turns.
+	let lastUsage: Usage | undefined;
 	let turns = 0;
 	let report = "";
 	let stderr = "";
@@ -117,6 +121,7 @@ export async function runAgent(
 		report: stripVerdict(report),
 		evidence,
 		usage,
+		contextTokens: lastUsage ? calculateContextTokens(lastUsage) : 0,
 		turns,
 		exitCode,
 		ms: Date.now() - startedAt,
@@ -164,6 +169,7 @@ export async function runAgent(
 				if (event.type === "message_end" && event.message?.role === "assistant") {
 					turns++;
 					usage = addUsage(usage, event.message.usage);
+					if (event.message.usage) lastUsage = event.message.usage;
 					const text = assistantText(event.message);
 					// The last assistant message that says anything is the report.
 					if (text) report = text;

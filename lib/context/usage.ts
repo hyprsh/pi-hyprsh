@@ -10,6 +10,7 @@ import {
 	estimateTokens,
 } from "@earendil-works/pi-coding-agent";
 
+import type { DelegatedUsage } from "../task/delegated.ts";
 import {
 	type ContextUsageSnapshot,
 	contextOnlyMessages,
@@ -29,6 +30,8 @@ export interface UsageInputs {
 	modelLabel?: string;
 	/** Auto-compaction reserve; omit when auto-compaction is disabled. */
 	autoCompactReserveTokens?: number;
+	/** What children read instead of this window; omit when nothing was delegated. */
+	delegated?: DelegatedUsage;
 }
 
 /**
@@ -47,6 +50,8 @@ export function computeUsage(inputs: UsageInputs): ContextUsageSnapshot {
 		categories,
 		estimatedTokens: categories.reduce((sum, category) => sum + category.tokens, 0),
 		autoCompactReserveTokens: inputs.autoCompactReserveTokens,
+		// Passed through, never added to a category: these tokens are not here.
+		delegated: inputs.delegated,
 	};
 }
 

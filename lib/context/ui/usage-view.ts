@@ -6,6 +6,7 @@
 import type { ExtensionCommandContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
+import type { DelegatedUsage } from "../../task/delegated.ts";
 import type { ContextUsageSnapshot, UsageCategory, UsagePreviewEntry } from "../model.ts";
 import { collectPreviewEntries } from "../usage.ts";
 import {
@@ -191,7 +192,14 @@ class UsageView {
 	private renderDashboard(width: number, terminalRows: number): string[] {
 		const theme = this.theme;
 		const border = theme.fg("border", "─".repeat(Math.max(1, width)));
-		const prefix = [border, "", ...this.headerLines(width), "", ...this.degradedWarningLines(width)];
+		const prefix = [
+			border,
+			"",
+			...this.headerLines(width),
+			"",
+			...this.delegatedLines(width),
+			...this.degradedWarningLines(width),
+		];
 		const descriptionLines = wrapDescriptionLines(theme, USAGE_DESCRIPTION, "dim", width);
 		const availableRows = Math.max(
 			1,
@@ -483,6 +491,21 @@ class UsageView {
 		return this.theme.fg(categoryColor(cell.categoryId), glyph);
 	}
 
+	/**
+	 * What delegation kept out, above the map rather than in it. The map's cells
+	 * are proportions of this window and these tokens were never in this window,
+	 * so a category for them would be a lie told in the one place that cannot
+	 * afford one.
+	 */
+	private delegatedLines(width: number): string[] {
+		const delegated = this.usage.delegated;
+		if (delegated === undefined) return [];
+		return wrapTextWithAnsi(
+			this.theme.fg("muted", `${BODY_INDENT}${formatDelegated(delegated)}`),
+			width,
+		).concat("");
+	}
+
 	/** Wrapped warning placed above the dashboard when capture was incomplete. */
 	private degradedWarningLines(width: number): string[] {
 		if (this.input.degradedReason === undefined) return [];
@@ -710,6 +733,22 @@ function categoryColor(categoryId: string | undefined): ThemeColor {
 		default:
 			return "muted";
 	}
+}
+
+/**
+ * One line of attribution: what children carried, what came back, and the ratio
+ * between them. The ratio is omitted rather than faked when nothing measurable
+ * was read, which is what a child that died at spawn looks like.
+ */
+export function formatDelegated(delegated: DelegatedUsage): string {
+	const units = `${delegated.units} delegated unit${delegated.units === 1 ? "" : "s"}`;
+	const read = `${formatTokens(delegated.contextTokens)} read elsewhere`;
+	const landed = `${formatTokens(delegated.resultTokens)} returned here`;
+	if (delegated.contextTokens === 0 || delegated.resultTokens === 0) {
+		return `${units}: ${read}, ${landed}.`;
+	}
+	const ratio = delegated.contextTokens / delegated.resultTokens;
+	return `${units}: ${read}, ${landed} \u2014 ${ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)}\u00d7 kept out of this window.`;
 }
 
 /** Compact token count: 951, 3.7k, 43.8k, 1M. */

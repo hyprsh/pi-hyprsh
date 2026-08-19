@@ -26,6 +26,12 @@ function seconds(ms: number): string {
 	return `${(ms / 1000).toFixed(1)}s`;
 }
 
+/** Thousands only: a child's window is never interesting to the token. */
+function contextSuffix(run: AgentRun): string {
+	if (run.contextTokens <= 0) return "";
+	return `, ${run.contextTokens < 1000 ? run.contextTokens : `${Math.round(run.contextTokens / 100) / 10}k`} context`;
+}
+
 function clampReport(report: string): string {
 	const lines = report.split("\n");
 	if (lines.length <= MAX_REPORT_LINES) return report;
@@ -53,7 +59,7 @@ function modelSuffix(run: AgentRun, sessionModel: string | undefined): string {
 }
 
 function formatRun(run: AgentRun, sessionModel: string | undefined): string {
-	const head = `### ${run.name} (${run.agent}) — ${run.failure ? "failed" : run.verdict} in ${seconds(run.ms)}${modelSuffix(run, sessionModel)}`;
+	const head = `### ${run.name} (${run.agent}) — ${run.failure ? "failed" : run.verdict} in ${seconds(run.ms)}${contextSuffix(run)}${modelSuffix(run, sessionModel)}`;
 	if (run.failure) return `${head}\n${run.failure}`;
 
 	return [
