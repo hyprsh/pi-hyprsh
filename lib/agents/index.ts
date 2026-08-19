@@ -9,6 +9,14 @@
  */
 
 export { type AgentDefinition, agentDefinitions, findAgent } from "./definitions.ts";
+export {
+	type AgentTier,
+	type ModelChoice,
+	type ModelRef,
+	qualify,
+	type Resolution,
+	resolveAgentModel,
+} from "./model.ts";
 export { type RunOptions, runAgent } from "./run.ts";
 export {
 	type AgentRun,

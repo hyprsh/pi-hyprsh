@@ -33,6 +33,15 @@ export interface ThinkingConfig {
 	mode: "summary" | "full";
 }
 
+/**
+ * Per-agent model overrides, keyed by agent name. An ID the registry does not
+ * report as available is ignored rather than fatal, so a config written for one
+ * provider does not break every dispatch on another.
+ */
+export interface AgentsConfig {
+	models: Record<string, string>;
+}
+
 export interface Config {
 	features: {
 		footer: boolean;
@@ -47,6 +56,7 @@ export interface Config {
 	};
 	footer: FooterConfig;
 	thinking: ThinkingConfig;
+	agents: AgentsConfig;
 }
 
 const DEFAULTS: Config = {
@@ -77,6 +87,9 @@ const DEFAULTS: Config = {
 	thinking: {
 		mode: "summary",
 	},
+	agents: {
+		models: {},
+	},
 };
 
 export function agentDir(): string {
@@ -94,6 +107,17 @@ function bool(value: unknown, fallback: boolean): boolean {
 function record(value: unknown): Record<string, unknown> | undefined {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
 	return value as Record<string, unknown>;
+}
+
+/** Keeps only string-to-string pairs; anything else in the object is dropped, not fatal. */
+function stringMap(value: unknown): Record<string, string> {
+	const raw = record(value);
+	if (!raw) return {};
+	const out: Record<string, string> = {};
+	for (const [key, entry] of Object.entries(raw)) {
+		if (typeof entry === "string" && entry.trim()) out[key] = entry.trim();
+	}
+	return out;
 }
 
 function percent(value: unknown, fallback: number): number {
@@ -125,6 +149,7 @@ export function loadConfig(path = configPath()): Config {
 	const segments = record(footer?.segments) ?? {};
 	const thresholds = record(footer?.thresholds) ?? {};
 	const thinking = record(raw.thinking) ?? {};
+	const agents = record(raw.agents) ?? {};
 	return {
 		features: {
 			footer: bool(features.footer, DEFAULTS.features.footer),
@@ -152,6 +177,9 @@ export function loadConfig(path = configPath()): Config {
 		},
 		thinking: {
 			mode: thinking.mode === "full" ? "full" : DEFAULTS.thinking.mode,
+		},
+		agents: {
+			models: stringMap(agents.models),
 		},
 	};
 }

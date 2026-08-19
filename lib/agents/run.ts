@@ -29,8 +29,11 @@ const VERDICT_LINE = /^\s*VERDICT:\s*(PASS|ISSUES|BLOCKED)\s*$/im;
 
 export interface RunOptions {
 	cwd: string;
-	/** Used when the definition names no model, so a child follows the session it was dispatched from. */
+	/** Already resolved by the caller; see lib/agents/model.ts. Absent lets pi pick its own default. */
 	model?: string;
+	/** Reported back so a configured model that could not be used is visible rather than silent. */
+	ignoredModel?: string;
+	/** Passed through only when the caller decided this child inherits it. */
 	thinkingLevel?: string;
 	signal?: AbortSignal;
 	/** Called whenever the run's observable state changes, for live rendering. */
@@ -97,7 +100,7 @@ export async function runAgent(
 ): Promise<AgentRun> {
 	const startedAt = Date.now();
 	const evidence: Evidence = { changed: [], commands: [] };
-	const model = definition.model ?? options.model;
+	const model = options.model;
 
 	let usage: Usage = emptyUsage();
 	let turns = 0;
@@ -108,6 +111,7 @@ export async function runAgent(
 		name,
 		agent: definition.name,
 		model,
+		ignoredModel: options.ignoredModel,
 		verdict: failure ? "unknown" : readVerdict(report),
 		report: stripVerdict(report),
 		evidence,
@@ -120,8 +124,7 @@ export async function runAgent(
 
 	const args = ["--mode", "json", "-p", "--no-session", "--tools", definition.tools.join(",")];
 	if (model) args.push("--model", model);
-	// Only a child that inherits the model inherits how hard it should think.
-	if (!definition.model && options.thinkingLevel) args.push("--thinking", options.thinkingLevel);
+	if (options.thinkingLevel) args.push("--thinking", options.thinkingLevel);
 
 	let promptDir: string | undefined;
 	try {

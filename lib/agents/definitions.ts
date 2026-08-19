@@ -16,6 +16,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
+import { type AgentTier, isTier, TIERS } from "./model.ts";
 
 const DIR = join(import.meta.dirname, "definitions");
 
@@ -29,6 +30,8 @@ export interface AgentDefinition {
 	tools: string[];
 	/** Absent means the child inherits the dispatching session's model and thinking level. */
 	model?: string;
+	/** Intention rather than an ID: resolved against the live registry at dispatch. */
+	tier?: AgentTier;
 	systemPrompt: string;
 }
 
@@ -37,6 +40,7 @@ type Frontmatter = {
 	description?: unknown;
 	tools?: unknown;
 	model?: unknown;
+	tier?: unknown;
 };
 
 /** Both spellings are valid YAML and both appear in agent files elsewhere. */
@@ -59,12 +63,20 @@ function parse(file: string, source: string): AgentDefinition {
 	if (!name) throw new Error(`agent definition ${file} has no name`);
 	if (!description) throw new Error(`agent definition ${file} has no description`);
 	if (tools.length === 0) throw new Error(`agent definition ${file} has no usable tools`);
+	// A misspelled tier would silently cost the user money on the parent's model,
+	// which is the failure this whole feature exists to remove.
+	if (frontmatter?.tier !== undefined && !isTier(frontmatter.tier)) {
+		throw new Error(
+			`agent definition ${file} has tier ${String(frontmatter.tier)}, expected one of ${TIERS.join(", ")}`,
+		);
+	}
 
 	return {
 		name,
 		description,
 		tools,
 		model: typeof frontmatter?.model === "string" ? frontmatter.model.trim() : undefined,
+		tier: isTier(frontmatter?.tier) ? frontmatter.tier : undefined,
 		systemPrompt: body.trim(),
 	};
 }

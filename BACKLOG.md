@@ -48,19 +48,35 @@ instead.
 
 ---
 
-## 3. Cheap models for cheap agents
+## 3. Cheap models for cheap agents — *done*
 
-Children inherit the dispatching session's model, so a `scout` running `ls`
-burns the same tokens as the parent. Inheriting is the safe default — a wrong
-model ID is a hard failure — but the cost win is obvious and unclaimed.
+`lib/agents/model.ts` resolves a child's model: an `agents.models` entry in
+`pi-hyprsh.json` wins, then a `model` in the definition's frontmatter, then a
+`tier: cheap` resolved to the least expensive model the registry reports as
+available *on the session's own provider*, then inheriting. Anything named but
+unavailable is dropped in favour of inheriting, so a config written for one
+provider cannot break dispatch on another.
 
-Options, cheapest first:
-- A `model` line in the agent definition, resolved against the live registry,
-  ignored when it does not match. Needs the registry check to avoid the hard
-  failure.
-- A `models` map in `pi-hyprsh.json` keyed by agent name.
+`scout` declares `tier: cheap`; `reviewer` and `worker` deliberately do not.
+A child that does not inherit the model no longer inherits the thinking level
+either, since `high` may not exist on the cheaper model.
 
-**Size:** small, once model resolution is decided.
+Measured on an `anthropic/claude-opus-5` session: the tier picks
+`claude-haiku-4-5`, which is 5× cheaper on both input and output. A direct
+spawn on that model returned `SPAWN_OK` for $0.001867 against roughly $0.0093
+for the same call on opus.
+
+Children are spawned with `provider/id`, never a bare ID. Review caught this:
+221 of the 1267 models pi ships are offered by more than one provider,
+`claude-haiku-4-5` among them, and pi's CLI only rescues a bare ambiguous ID
+when exactly one matching provider is authenticated — with two it errors and the
+child dies at spawn. The inherit path had the same latent bug before this round
+and is fixed with it.
+
+**Not done:** no live `task` dispatch has run since the change, because pi loads
+the extension at session start. The resolution is covered by 19 unit tests and
+the qualified spawn was proven by hand, but the two have not been seen joined
+up.
 
 ---
 

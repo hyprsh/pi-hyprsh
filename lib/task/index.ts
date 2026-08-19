@@ -18,15 +18,18 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
+	type AgentDefinition,
 	type AgentRun,
 	addUsage,
 	agentDefinitions,
 	emptyUsage,
 	findAgent,
+	qualify,
+	resolveAgentModel,
 	runAgent,
 } from "../agents/index.ts";
 import { compact } from "../compact/index.ts";
-import type { Thresholds } from "../config.ts";
+import type { AgentsConfig, Thresholds } from "../config.ts";
 import { fetchQuota } from "../quota/index.ts";
 import { withReason } from "../reason/index.ts";
 import { type Brief, briefSchema, conflicts, renderBrief } from "./brief.ts";
@@ -102,10 +105,25 @@ export async function dispatchPhased<T, R>(
 	return results;
 }
 
-export function registerTask(pi: ExtensionAPI, thresholds: Thresholds): void {
+export function registerTask(pi: ExtensionAPI, thresholds: Thresholds, agents: AgentsConfig): void {
 	const definitions = agentDefinitions();
 	const names = definitions.map((agent) => agent.name);
 	const readOnly = new Set(definitions.filter((agent) => !agent.tools.includes("write")).map((a) => a.name));
+
+	const sessionModelRef = () => (session?.model ? qualify(session.model) : undefined);
+
+	/**
+	 * Read live rather than cached at startup: which models are available depends
+	 * on auth that can change inside a session, and a stale list would send a
+	 * child to a model that has since stopped working.
+	 */
+	const chooseModel = (definition: AgentDefinition) =>
+		resolveAgentModel(
+			definition,
+			agents.models[definition.name],
+			session?.modelRegistry?.getAvailable() ?? [],
+			session?.model,
+		);
 
 	let session: ExtensionContext | undefined;
 	let active: AgentRun[] = [];
@@ -184,7 +202,7 @@ export function registerTask(pi: ExtensionAPI, thresholds: Thresholds): void {
 
 					const report = () => {
 						onUpdate?.({
-							content: [{ type: "text", text: formatRuns(active, running) }],
+							content: [{ type: "text", text: formatRuns(active, running, sessionModelRef()) }],
 							details: { runs: active },
 						});
 						requestRender();
@@ -200,10 +218,15 @@ export function registerTask(pi: ExtensionAPI, thresholds: Thresholds): void {
 								const definition = findAgent(brief.agent);
 								if (!definition) throw new Error(`unknown agent: ${brief.agent}`);
 
+								const choice = chooseModel(definition);
+								// Inheriting still qualifies the session's own model: a bare ID is
+								// ambiguous for the child even when it was unambiguous for the parent.
+								const ref = choice.model ?? session?.model;
 								const run = await runAgent(brief.name, definition, renderBrief(brief), {
 									cwd: session?.cwd ?? process.cwd(),
-									model: session?.model?.id,
-									thinkingLevel: session?.thinkingLevel,
+									model: ref ? qualify(ref) : undefined,
+									ignoredModel: choice.ignored,
+									thinkingLevel: choice.inheritThinking ? session?.thinkingLevel : undefined,
 									signal,
 									onProgress: requestRender,
 								});
@@ -215,7 +238,7 @@ export function registerTask(pi: ExtensionAPI, thresholds: Thresholds): void {
 						);
 
 						return {
-							content: [{ type: "text", text: formatRuns(runs, running) }],
+							content: [{ type: "text", text: formatRuns(runs, running, sessionModelRef()) }],
 							details: { runs },
 							// Children's spend is real spend; roll it into this session's accounting.
 							usage: runs.reduce((total, run) => addUsage(total, run.usage), emptyUsage()),

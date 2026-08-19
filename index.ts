@@ -33,6 +33,6 @@ export default function (pi: ExtensionAPI) {
 	if (config.features.todo) registerTodo(pi);
 	// The quota thresholds mean the same thing here as in the footer: the point
 	// at which an allowance is tight enough to change behaviour.
-	if (config.features.task) registerTask(pi, config.footer.thresholds);
+	if (config.features.task) registerTask(pi, config.footer.thresholds, config.agents);
 	registerThinking(pi, config.thinking);
 }

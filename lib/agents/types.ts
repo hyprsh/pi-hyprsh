@@ -32,6 +32,8 @@ export interface AgentRun {
 	name: string;
 	agent: string;
 	model?: string;
+	/** Configured for this agent but not available, so the child inherited instead. */
+	ignoredModel?: string;
 	/** Self-reported. */
 	verdict: ReportedVerdict;
 	/** The child's final assistant message. Self-reported. */

@@ -121,6 +121,12 @@ describe("agentDefinitions", () => {
 		assert.deepEqual([...names].sort(), ["reviewer", "scout", "worker"]);
 	});
 
+	test("scout asks for a cheap model; the writing agent does not", () => {
+		const tiers = Object.fromEntries(agentDefinitions().map((agent) => [agent.name, agent.tier]));
+		assert.equal(tiers.scout, "cheap");
+		assert.equal(tiers.worker, undefined, "a weaker model must not be writing the code");
+	});
+
 	test("worker is the only agent that writes", () => {
 		const writers = agentDefinitions()
 			.filter((agent) => agent.tools.includes("write"))

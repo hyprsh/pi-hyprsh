@@ -41,8 +41,19 @@ function evidenceLines(run: AgentRun): string[] {
 	return lines;
 }
 
-function formatRun(run: AgentRun): string {
-	const head = `### ${run.name} (${run.agent}) — ${run.failure ? "failed" : run.verdict} in ${seconds(run.ms)}`;
+/**
+ * Named only when it is not the session's own model. A child on a cheaper model
+ * is worth seeing, and so is a configured model that was dropped as unavailable:
+ * both look identical in the report otherwise.
+ */
+function modelSuffix(run: AgentRun, sessionModel: string | undefined): string {
+	if (run.ignoredModel) return ` on ${run.model} (configured ${run.ignoredModel} is unavailable)`;
+	if (!run.model || run.model === sessionModel) return "";
+	return ` on ${run.model}`;
+}
+
+function formatRun(run: AgentRun, sessionModel: string | undefined): string {
+	const head = `### ${run.name} (${run.agent}) — ${run.failure ? "failed" : run.verdict} in ${seconds(run.ms)}${modelSuffix(run, sessionModel)}`;
 	if (run.failure) return `${head}\n${run.failure}`;
 
 	return [
@@ -54,8 +65,12 @@ function formatRun(run: AgentRun): string {
 }
 
 /** What the caller reads. Verdicts are the child's own claim and say so. */
-export function formatRuns(runs: readonly AgentRun[], running: ReadonlySet<string>): string {
-	const parts = runs.map(formatRun);
+export function formatRuns(
+	runs: readonly AgentRun[],
+	running: ReadonlySet<string>,
+	sessionModel?: string,
+): string {
+	const parts = runs.map((run) => formatRun(run, sessionModel));
 	if (running.size > 0) parts.push(`### still running: ${[...running].join(", ")}`);
 	if (parts.length === 0) return "No units dispatched.";
 
