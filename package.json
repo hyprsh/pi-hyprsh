@@ -30,6 +30,9 @@
 	"pi": {
 		"extensions": [
 			"./index.ts"
+		],
+		"skills": [
+			"./skills"
 		]
 	},
 	"peerDependencies": {
@@ -40,6 +43,7 @@
 	"files": [
 		"index.ts",
 		"lib/",
+		"skills/",
 		"README.md"
 	],
 	"devDependencies": {
