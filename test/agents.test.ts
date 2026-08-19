@@ -13,8 +13,8 @@ import { describe, test } from "node:test";
 import type { Usage } from "@earendil-works/pi-ai";
 import { type AgentDefinition, loadAgentDefinitions, writes } from "../lib/agents/definitions.ts";
 import { CHEAPEST } from "../lib/agents/model.ts";
-import { readVerdict, stripVerdict } from "../lib/agents/run.ts";
-import { type AgentRun, addUsage, emptyUsage, succeeded } from "../lib/agents/types.ts";
+import { readVerdict, recordEvidence, stripVerdict } from "../lib/agents/run.ts";
+import { type AgentRun, addUsage, type Evidence, emptyUsage, succeeded } from "../lib/agents/types.ts";
 
 type UsageOverrides = Omit<Partial<Usage>, "cost"> & { cost?: Partial<Usage["cost"]> };
 
@@ -287,5 +287,69 @@ describe("succeeded", () => {
 
 	test("rejects a child that never stated a verdict", () => {
 		assert.equal(succeeded(run({ verdict: "unknown" })), false);
+	});
+});
+
+/**
+ * Evidence is the reason a caller can believe a child at all: the files and
+ * commands are read off the event stream rather than out of the child's own
+ * report. Every miss here is silent — a run that changed a file looks like a
+ * run that changed nothing, which reads as a child that did less harm than it did.
+ */
+describe("recordEvidence", () => {
+	const blank = (): Evidence => ({ changed: [], commands: [] });
+
+	test("write and edit both name the file under file_path", () => {
+		const evidence = blank();
+		recordEvidence(evidence, "write", { file_path: "lib/new.ts", content: "x" });
+		recordEvidence(evidence, "edit", { file_path: "lib/old.ts", edits: [] });
+		assert.deepEqual(evidence.changed, ["lib/new.ts", "lib/old.ts"]);
+	});
+
+	// The two tools have disagreed about the key before, and the fallback is the
+	// only thing keeping a rename of it from emptying the changed list.
+	test("path counts as the file when file_path is absent", () => {
+		const evidence = blank();
+		recordEvidence(evidence, "write", { path: "lib/new.ts" });
+		assert.deepEqual(evidence.changed, ["lib/new.ts"]);
+	});
+
+	test("file_path wins when a call carries both", () => {
+		const evidence = blank();
+		recordEvidence(evidence, "edit", { file_path: "lib/real.ts", path: "lib/other.ts" });
+		assert.deepEqual(evidence.changed, ["lib/real.ts"]);
+	});
+
+	// A child editing one file ten times changed one file.
+	test("the same file written twice is listed once", () => {
+		const evidence = blank();
+		recordEvidence(evidence, "edit", { file_path: "lib/same.ts" });
+		recordEvidence(evidence, "edit", { path: "lib/same.ts" });
+		assert.deepEqual(evidence.changed, ["lib/same.ts"]);
+	});
+
+	test("bash records the command line, repeats and all", () => {
+		const evidence = blank();
+		recordEvidence(evidence, "bash", { command: "npm test" });
+		recordEvidence(evidence, "bash", { command: "npm test" });
+		assert.deepEqual(evidence.commands, ["npm test", "npm test"]);
+		assert.deepEqual(evidence.changed, []);
+	});
+
+	test("a read never counts as a change", () => {
+		const evidence = blank();
+		recordEvidence(evidence, "read", { file_path: "lib/untouched.ts" });
+		recordEvidence(evidence, "grep", { path: "lib" });
+		assert.deepEqual(evidence, { changed: [], commands: [] });
+	});
+
+	test("arguments of the wrong shape are dropped rather than recorded", () => {
+		const evidence = blank();
+		recordEvidence(evidence, "write", undefined);
+		recordEvidence(evidence, "write", "lib/new.ts");
+		recordEvidence(evidence, "write", { file_path: 42 });
+		recordEvidence(evidence, "write", {});
+		recordEvidence(evidence, "bash", { command: ["npm", "test"] });
+		assert.deepEqual(evidence, { changed: [], commands: [] });
 	});
 });

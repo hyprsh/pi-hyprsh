@@ -11,25 +11,49 @@ serialised rather than given worktrees (the decision at the end).
 
 ---
 
-## 1. Regression protection — *started*
+## 1. Regression protection — *done*
 
 **Shipped.** `npm test` runs `node --test` with no new dependency, `npm run
 check` now ends in it, and `.github/workflows/check.yml` runs the lot on Node
-24. 39 tests cover `lib/task/brief.ts`, `lib/task` dispatch and `lib/agents`.
-Two were mutation-checked rather than merely observed green: breaking `overlaps`
-to a bare `startsWith`, and un-serialising the writers, each turned exactly one
-test red.
+24. 127 tests cover `lib/task/brief.ts`, `lib/task` dispatch and render,
+`lib/config.ts`, `lib/web/config.ts`, `lib/todo/model.ts` and `lib/agents`.
 
-**Still uncovered:**
+Every row of the old uncovered table is closed. Two functions had to be
+exported to be reachable — `recordEvidence` from `lib/agents/run.ts`, and the
+validator in `lib/web/config.ts` as `parseWebConfig`. Both alternatives were
+worse: a real child process for the first, and the loader's session-wide memo
+for the second, which caches the first error and would let one test's bad key
+decide the next test's result.
 
-| Function | The case that will break silently |
+Seven mutations were checked rather than merely observing green. Each was run
+on an off-tree copy, against the whole suite:
+
+| Mutation | Result |
 |---|---|
-| `lib/todo/model.ts` `parseTodos` | a skip with no reason, or a whitespace-only one, is rejected |
-| `lib/web/config.ts` validation | a bad key throws naming the offending path |
-| `lib/agents/run.ts` `recordEvidence` | `file_path` and `path` both count as a change; `bash` records the command |
-| `lib/task/render.ts` `panelLines` | never rendered, never asserted (see item 4) |
+| `overlaps` reduced to a bare `startsWith` | 1 red |
+| writers un-serialised | 1 red |
+| the `.trim()` dropped from a todo's `reason` | 1 red |
+| `record.file_path ?? record.path` reduced to `record.file_path` | 1 red |
+| the panel's `MAX_PANEL_LINES` break removed | 2 red |
+| the panel's verdict mark hard-wired to `pass` | 1 red |
+| `positive()` returning its fallback instead of throwing | 1 red |
 
-**Size:** ~80 lines of test.
+The last two exist because a review caught them surviving. The first draft of
+this entry also claimed `lib/web/config.ts` was covered when the tests actually
+imported `lib/config.ts`, a different module with the opposite contract — that
+row was open, and closing it is where `parseWebConfig` came from.
+
+The panel tests assert content and the line budget through an identity theme.
+They say nothing about how it looks, so item 4's entry stands unchanged: the
+widget has still never been watched running. Writing them did surface one
+behaviour worth knowing, now pinned in `test/render.test.ts`: past six finished
+units the line budget is spent before the running ones are reached, so the
+panel stops naming what is in flight even though something being in flight is
+the only reason it is on screen.
+
+What is still untested is untested on purpose: `replayTodos` and `runAgent`
+both need a session file or a live child, which is item 4's territory rather
+than a unit test's.
 
 ---
 

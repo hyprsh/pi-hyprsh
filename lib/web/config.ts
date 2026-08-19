@@ -169,7 +169,12 @@ function priority(value: unknown, path: string): SearchProviderId[] {
 	return seen;
 }
 
-function parse(raw: Record<string, unknown>, path: string): WebConfig {
+/**
+ * Validation, separated from the session cache below so it can be exercised
+ * one bad key at a time. `path` appears in every message because the user's
+ * next move is to open that file at that key.
+ */
+export function parseWebConfig(raw: Record<string, unknown>, path: string): WebConfig {
 	const web = record(raw.web, "web", path);
 	const search = record(web.search, "web.search", path);
 	const fetch = record(web.fetch, "web.fetch", path);
@@ -226,7 +231,7 @@ export function loadWebConfig(path = configPath()): WebConfig {
 		}
 		if (!cached) {
 			try {
-				cached = { config: parse(raw, path) };
+				cached = { config: parseWebConfig(raw, path) };
 			} catch (error) {
 				cached = { error: error instanceof Error ? error : new Error(String(error)) };
 			}

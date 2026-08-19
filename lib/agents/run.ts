@@ -78,7 +78,8 @@ function assistantText(message: AssistantMessage): string {
 		.trim();
 }
 
-function recordEvidence(evidence: Evidence, toolName: string, args: unknown): void {
+/** Exported for the tests: this is where a caller's trust in the evidence is decided. */
+export function recordEvidence(evidence: Evidence, toolName: string, args: unknown): void {
 	if (!args || typeof args !== "object") return;
 	const record = args as Record<string, unknown>;
 
