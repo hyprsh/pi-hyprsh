@@ -43,6 +43,7 @@ export interface Config {
 		constitution: boolean;
 		ask: boolean;
 		todo: boolean;
+		task: boolean;
 	};
 	footer: FooterConfig;
 	thinking: ThinkingConfig;
@@ -58,6 +59,7 @@ const DEFAULTS: Config = {
 		constitution: true,
 		ask: true,
 		todo: true,
+		task: true,
 	},
 	footer: {
 		segments: {
@@ -133,6 +135,7 @@ export function loadConfig(path = configPath()): Config {
 			constitution: bool(features.constitution, DEFAULTS.features.constitution),
 			ask: bool(features.ask, DEFAULTS.features.ask),
 			todo: bool(features.todo, DEFAULTS.features.todo),
+			task: bool(features.task, DEFAULTS.features.task),
 		},
 		footer: {
 			segments: {

@@ -13,6 +13,7 @@ import { registerConstitution } from "./lib/constitution/index.ts";
 import { registerContext } from "./lib/context/index.ts";
 import { registerFooter } from "./lib/footer/index.ts";
 import { registerReason } from "./lib/reason/index.ts";
+import { registerTask } from "./lib/task/index.ts";
 import { registerThinking } from "./lib/thinking/index.ts";
 import { registerTodo } from "./lib/todo/index.ts";
 import { registerWeb } from "./lib/web/index.ts";
@@ -30,5 +31,8 @@ export default function (pi: ExtensionAPI) {
 	if (config.features.constitution) registerConstitution(pi);
 	if (config.features.ask) registerAsk(pi);
 	if (config.features.todo) registerTodo(pi);
+	// The quota thresholds mean the same thing here as in the footer: the point
+	// at which an allowance is tight enough to change behaviour.
+	if (config.features.task) registerTask(pi, config.footer.thresholds);
 	registerThinking(pi, config.thinking);
 }
