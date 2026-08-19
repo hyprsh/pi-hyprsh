@@ -1,17 +1,22 @@
 /**
- * Compact framing for tool calls.
+ * Compact framing and the header line on tool calls.
  *
  * pi frames every tool call in a padded box: a separator line, a blank tinted
  * line, the call, the result, and a second blank tinted line. Taking over the
  * render shell drops the two blank lines, so a read is three lines — separator,
- * reason, call — instead of five. The one-column indent and the pending /
+ * header, call — instead of five. The one-column indent and the pending /
  * success / error tint are re-applied here, so the block still reads as one
  * unit and still shows its status.
  *
- * The call line also ends in the time the call took, measured around `execute`
- * itself, so it is the real duration and does not depend on when the row was
- * repainted. Calls replayed from a session are not timed, since their execution
- * happened in another process.
+ * Above the tool's own call rendering sits one header line:
+ *
+ *     [bash] Confirm the editor component is free -> 0.3s done
+ *     $ rg -n setEditorComponent lib index.ts
+ *
+ * The tool name, the `reasoning` argument added by lib/reason, and the state of
+ * the call. The duration is measured around `execute` itself, so it is the real
+ * time spent and does not depend on when the row was repainted. Calls replayed
+ * from a session never ran in this process, so they carry no state at all.
  */
 
 import { keyHint, type Theme, type ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -40,6 +45,13 @@ interface Timing {
 const DURATIONS = new Map<string, number>();
 const MAX_PENDING_DURATIONS = 64;
 
+/**
+ * Calls whose `execute` has not returned yet, which is what separates a running
+ * call from one replayed out of a session file: both lack a duration, only the
+ * running one is in here.
+ */
+const RUNNING = new Set<string>();
+
 function recordDuration(toolCallId: string, ms: number): void {
 	if (DURATIONS.size >= MAX_PENDING_DURATIONS) {
 		const oldest = DURATIONS.keys().next();
@@ -54,19 +66,21 @@ function tintFor(isPartial: boolean, isError: boolean): Tint {
 }
 
 /**
- * Indents and tints whatever the wrapped renderer produced, and appends the
- * suffix to its last non-empty line when there is room for it.
+ * Puts the header above whatever the wrapped renderer produced, then indents
+ * and tints the whole block. Result rows reuse it with an empty header.
  */
 class Framed implements Component {
 	inner: Component | undefined;
+	private readonly header = new Text("", 0, 0);
+	private hasHeader = false;
 	private theme: Theme | undefined;
 	private tint: Tint = "toolPendingBg";
-	private suffix = "";
 
-	setFrame(theme: Theme, tint: Tint, suffix: string): void {
+	setFrame(theme: Theme, tint: Tint, header: string): void {
 		this.theme = theme;
 		this.tint = tint;
-		this.suffix = suffix;
+		this.hasHeader = header !== "";
+		this.header.setText(header);
 	}
 
 	setInner(component: Component | undefined): void {
@@ -74,29 +88,24 @@ class Framed implements Component {
 	}
 
 	invalidate(): void {
+		this.header.invalidate();
 		this.inner?.invalidate?.();
 	}
 
 	render(width: number): string[] {
 		const theme = this.theme;
 		const contentWidth = Math.max(1, width - PAD * 2);
-		const lines = this.inner?.render(contentWidth) ?? [];
+		const lines = [
+			...(this.hasHeader ? this.header.render(contentWidth) : []),
+			...(this.inner?.render(contentWidth) ?? []),
+		];
 		if (lines.length === 0 || !theme) return lines;
 
-		const suffixed = this.suffix ? appendSuffix(lines, this.suffix, contentWidth) : lines;
-		return suffixed.map((line) => {
+		return lines.map((line) => {
 			const padding = " ".repeat(Math.max(0, width - PAD - visibleWidth(line)));
 			return theme.bg(this.tint, " ".repeat(PAD) + line + padding);
 		});
 	}
-}
-
-/** Renderers pad their lines out to the width they were given, so the last one is trimmed first. */
-function appendSuffix(lines: string[], suffix: string, width: number): string[] {
-	const index = lines.findLastIndex((line) => visibleWidth(line.trimEnd()) > 0);
-	const line = index < 0 ? undefined : lines[index]?.trimEnd();
-	if (line === undefined || visibleWidth(line) + visibleWidth(suffix) > width) return lines;
-	return lines.map((current, i) => (i === index ? line + suffix : current));
 }
 
 /** Timed only when this process ran the call, so replayed history stays unlabelled. */
@@ -112,6 +121,29 @@ function elapsed(state: Timing, toolCallId: string): number | undefined {
 /** Same shape as pi's own duration label. */
 function formatDuration(ms: number): string {
 	return `${(ms / 1000).toFixed(1)}s`;
+}
+
+/** Empty for a replayed call: it neither runs here nor was timed here. */
+function statusOf(state: Timing, toolCallId: string, isError: boolean): string {
+	const ms = elapsed(state, toolCallId);
+	if (ms !== undefined) return `-> ${formatDuration(ms)} ${isError ? "error" : "done"}`;
+	return RUNNING.has(toolCallId) ? "-> running" : "";
+}
+
+/** The `reasoning` argument lib/reason adds; absent on a tool that is only compacted. */
+function reasonOf(args: unknown): string {
+	if (!args || typeof args !== "object") return "";
+	const reasoning = (args as { reasoning?: unknown }).reasoning;
+	return typeof reasoning === "string" ? reasoning.trim() : "";
+}
+
+function headerFor(name: string, args: unknown, status: string, theme: Theme): string {
+	const reason = reasonOf(args);
+	return [
+		theme.fg("toolTitle", theme.bold(`[${name}]`)),
+		...(reason ? [theme.italic(theme.fg("thinkingText", reason))] : []),
+		...(status ? [theme.fg("muted", status)] : []),
+	].join(" ");
 }
 
 function textOutput(content: readonly { type: string; text?: string }[]): string {
@@ -154,22 +186,26 @@ export function compact<TParams extends TSchema, TDetails, TState>(
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			const startedAt = Date.now();
+			RUNNING.add(toolCallId);
 			try {
 				return await base.execute(toolCallId, params, signal, onUpdate, ctx);
 			} finally {
 				recordDuration(toolCallId, Date.now() - startedAt);
+				RUNNING.delete(toolCallId);
 			}
 		},
 
+		/** The header carries the tool name, so a tool without a call renderer needs no line of its own. */
 		renderCall(args, theme, context) {
 			const frame = context.lastComponent instanceof Framed ? context.lastComponent : new Framed();
-			const ms = elapsed(context.state as Timing, context.toolCallId);
-			const suffix = ms === undefined ? "" : theme.fg("muted", ` ${formatDuration(ms)}`);
-			frame.setFrame(theme, tintFor(context.isPartial, context.isError), suffix);
+			const status = statusOf(context.state as Timing, context.toolCallId, context.isError);
+			frame.setFrame(
+				theme,
+				tintFor(context.isPartial, context.isError),
+				headerFor(base.name, args, status, theme),
+			);
 			frame.setInner(
-				baseRenderCall
-					? baseRenderCall(args, theme, { ...context, lastComponent: frame.inner })
-					: new Text(theme.fg("toolTitle", theme.bold(base.name)), 0, 0),
+				baseRenderCall ? baseRenderCall(args, theme, { ...context, lastComponent: frame.inner }) : undefined,
 			);
 			return frame;
 		},
