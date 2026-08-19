@@ -21,8 +21,14 @@ const TODO = Type.Object({
 	status: Type.Unsafe<Todo["status"]>({
 		type: "string",
 		enum: [...STATUSES],
-		description: "pending, in_progress (at most one) or completed.",
+		description:
+			"pending, in_progress (at most one), completed, or skipped for a step you decided not to do.",
 	}),
+	reason: Type.Optional(
+		Type.String({
+			description: "Why the step was skipped. Required for skipped, omitted otherwise.",
+		}),
+	),
 });
 
 export function registerTodo(pi: ExtensionAPI): void {
@@ -75,6 +81,7 @@ export function registerTodo(pi: ExtensionAPI): void {
 			promptGuidelines: [
 				"Use todo for work with several distinct steps; skip it for a single edit or question.",
 				"Send the whole list on every call, keep exactly one task in_progress, and mark it completed before starting the next.",
+				"Never drop a step you decided against. Keep it in the list as skipped with a reason, so the plan still shows what was not done.",
 			],
 			parameters: Type.Object({
 				todos: Type.Array(TODO, {

@@ -10,7 +10,7 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 export const TOOL_NAME = "todo";
 export const MAX_TODOS = 50;
-export const STATUSES = ["pending", "in_progress", "completed"] as const;
+export const STATUSES = ["pending", "in_progress", "completed", "skipped"] as const;
 
 export type TodoStatus = (typeof STATUSES)[number];
 
@@ -18,10 +18,17 @@ export interface Todo {
 	id: string;
 	text: string;
 	status: TodoStatus;
+	/** Why a step was skipped. Carried only by skipped entries, where it is required. */
+	reason?: string;
 }
 
 function isStatus(value: unknown): value is TodoStatus {
 	return typeof value === "string" && (STATUSES as readonly string[]).includes(value);
+}
+
+/** Completed and skipped are both settled: neither is work still owed. */
+export function isResolved(todo: Todo): boolean {
+	return todo.status === "completed" || todo.status === "skipped";
 }
 
 /** Throws with a message the model can act on; the tool turns it into an error result. */
@@ -45,7 +52,11 @@ export function parseTodos(input: unknown): Todo[] {
 
 		if (!isStatus(entry.status)) throw new Error(`todo ${id} needs status ${STATUSES.join(", ")}`);
 
-		todos.push({ id, text, status: entry.status });
+		const reason = typeof entry.reason === "string" ? entry.reason.replace(/\s+/g, " ").trim() : "";
+		// A skip with no reason is the silent drop this status exists to prevent.
+		if (entry.status === "skipped" && !reason) throw new Error(`skipped todo ${id} needs a reason`);
+
+		todos.push(reason ? { id, text, status: entry.status, reason } : { id, text, status: entry.status });
 	}
 
 	if (todos.filter((todo) => todo.status === "in_progress").length > 1) {
@@ -60,7 +71,7 @@ export function completedCount(todos: readonly Todo[]): number {
 
 /** A finished list has nothing left to show, so the panel gets out of the way. */
 export function isFinished(todos: readonly Todo[]): boolean {
-	return todos.length === 0 || completedCount(todos) === todos.length;
+	return todos.length === 0 || todos.every(isResolved);
 }
 
 /** The snapshot a tool result carries, read back defensively on replay. */
