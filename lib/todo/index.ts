@@ -11,7 +11,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Type } from "typebox";
 import { compact } from "../compact/index.ts";
 import { MAX_TODOS, parseTodos, replayTodos, STATUSES, TOOL_NAME, type Todo } from "./model.ts";
-import { formatList, panelLines } from "./render.ts";
+import { formatList, formatResult, panelLines } from "./render.ts";
 
 const WIDGET_KEY = "hyprsh-todo";
 
@@ -88,7 +88,7 @@ export function registerTodo(pi: ExtensionAPI): void {
 				requestRender();
 
 				return {
-					content: [{ type: "text", text: formatList(todos) }],
+					content: [{ type: "text", text: formatResult(todos) }],
 					details: { todos },
 				};
 			},

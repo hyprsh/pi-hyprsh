@@ -1,6 +1,6 @@
 /**
- * Rendering for the todo list: the panel above the editor and the plain text
- * form used by `/todos` and the tool result.
+ * Rendering for the todo list: the panel above the editor, the plain text form
+ * `/todos` prints, and the text a `todo` call reports back.
  *
  * The panel never grows past MAX_PANEL_LINES. Past that budget completed rows
  * are dropped first and unfinished ones last, and a trailing line says what was
@@ -83,4 +83,9 @@ export function formatList(todos: readonly Todo[]): string {
 	if (todos.length === 0) return "No todos yet. Ask the agent to add some!";
 	const rows = todos.map((todo) => ` ${GLYPHS[todo.status]} ${todo.text}`);
 	return [heading(todos), ...rows].join("\n");
+}
+
+/** The tool speaks to the model, so an emptied list is a state and not an invitation. */
+export function formatResult(todos: readonly Todo[]): string {
+	return todos.length === 0 ? "Todo list cleared." : formatList(todos);
 }
