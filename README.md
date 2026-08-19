@@ -15,7 +15,7 @@ pi install .        # every session
 pi -e .             # one run, global settings untouched
 ```
 
-No build step — Pi loads the TypeScript through jiti. Requires Node 22+ and Pi 0.84.0+.
+No build step — Pi loads the TypeScript through jiti. Requires Node 22.19+ and Pi 0.84.0+, matching Pi's own floor.
 
 Only one extension may own the footer. `web_search` / `web_fetch` collide with `pi-web-access`, `ask_user_question` with `@juicesharp/rpiv-ask-user-question`, and `todo` / `/todos` with `@juicesharp/rpiv-todo`. Do not run those alongside this pack.
 
