@@ -1,7 +1,8 @@
 /**
  * task — delegate bounded work to child agents.
  *
- * One call carries one or more briefs. Independent units run together, and the
+ * One call carries one or more briefs. Read-only units run together; units that
+ * can write run one at a time, since they all share the session's tree. The
  * results come back keyed by the caller's own names so nothing is matched by
  * arrival order.
  *
@@ -67,6 +68,40 @@ async function mapWithLimit<T, R>(
 	return results;
 }
 
+/**
+ * Readers together, then writers one at a time.
+ *
+ * `conflicts` already refuses two children that claim the same path, but every
+ * child still runs in the session's own tree. Nothing there stops a writer's
+ * `npm run check` from observing a sibling's half-finished edits, and a verdict
+ * read off that state describes a tree that never existed and never will. A
+ * worktree per child would fix it properly and costs an install and a merge;
+ * running writers alone costs wall clock on multi-writer fan-outs, which are
+ * rare, and nothing otherwise.
+ *
+ * Results stay in the caller's original order, so a phase never reorders what
+ * comes back.
+ */
+export async function dispatchPhased<T, R>(
+	items: readonly T[],
+	isReadOnly: (item: T) => boolean,
+	limit: number,
+	run: (item: T) => Promise<R>,
+): Promise<R[]> {
+	const results = new Array<R>(items.length);
+	const numbered = items.map((item, index) => ({ item, index }));
+	const phases: { entries: typeof numbered; limit: number }[] = [
+		{ entries: numbered.filter((entry) => isReadOnly(entry.item)), limit },
+		{ entries: numbered.filter((entry) => !isReadOnly(entry.item)), limit: 1 },
+	];
+	for (const phase of phases) {
+		await mapWithLimit(phase.entries, phase.limit, async (entry) => {
+			results[entry.index] = await run(entry.item);
+		});
+	}
+	return results;
+}
+
 export function registerTask(pi: ExtensionAPI, thresholds: Thresholds): void {
 	const definitions = agentDefinitions();
 	const names = definitions.map((agent) => agent.name);
@@ -119,7 +154,7 @@ export function registerTask(pi: ExtensionAPI, thresholds: Thresholds): void {
 						minItems: 1,
 						maxItems: MAX_UNITS,
 						description:
-							"One brief per unit of work. Independent units run at the same time, so order carries no meaning.",
+							"One brief per unit of work. Read-only units run at the same time; units that can write run one after another, in the order given.",
 					}),
 				}),
 
@@ -157,22 +192,27 @@ export function registerTask(pi: ExtensionAPI, thresholds: Thresholds): void {
 					report();
 
 					try {
-						const runs = await mapWithLimit(briefs, concurrency, async (brief) => {
-							const definition = findAgent(brief.agent);
-							if (!definition) throw new Error(`unknown agent: ${brief.agent}`);
+						const runs = await dispatchPhased(
+							briefs,
+							(brief) => readOnly.has(brief.agent),
+							concurrency,
+							async (brief) => {
+								const definition = findAgent(brief.agent);
+								if (!definition) throw new Error(`unknown agent: ${brief.agent}`);
 
-							const run = await runAgent(brief.name, definition, renderBrief(brief), {
-								cwd: session?.cwd ?? process.cwd(),
-								model: session?.model?.id,
-								thinkingLevel: session?.thinkingLevel,
-								signal,
-								onProgress: requestRender,
-							});
-							active = [...active, run];
-							running.delete(brief.name);
-							report();
-							return run;
-						});
+								const run = await runAgent(brief.name, definition, renderBrief(brief), {
+									cwd: session?.cwd ?? process.cwd(),
+									model: session?.model?.id,
+									thinkingLevel: session?.thinkingLevel,
+									signal,
+									onProgress: requestRender,
+								});
+								active = [...active, run];
+								running.delete(brief.name);
+								report();
+								return run;
+							},
+						);
 
 						return {
 							content: [{ type: "text", text: formatRuns(runs, running) }],
