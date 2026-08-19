@@ -175,7 +175,8 @@ export function registerAsk(pi: ExtensionAPI): void {
 				promptSnippet:
 					"Ask the user structured questions with typed options when a decision is genuinely ambiguous.",
 				promptGuidelines: [
-					"Ask when a requirement is underspecified and a wrong guess would waste work, not to confirm what was already stated.",
+					"Classify the fork before asking. When the answer is a fact you could observe by running something — behaviour, timing, output, layout, performance — the question is not the user's to answer: run the experiment and let the result decide.",
+					"Ask for a genuine preference, a product call or an irreversible action, and when a wrong guess would waste real work. Never to confirm what was already stated.",
 					"Group everything you need into one call of up to four questions rather than asking repeatedly.",
 					`Order the options so the one you recommend is first: it is labelled ${RECOMMENDED} in the UI. Give every option a description of what it means or what it costs.`,
 				],
