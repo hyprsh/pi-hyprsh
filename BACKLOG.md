@@ -141,13 +141,14 @@ filesystem level stops a child writing anywhere.
 
 ### Against
 
-- **A fresh worktree has no `node_modules`.** Verified: `git worktree add` then
-  `npm run check` fails with `biome: command not found`. Since every brief is
-  required to carry verification commands, worktrees would break the pack's
-  central discipline on day one. Fixing it means `npm install` per worktree
-  (slow, and duplicated disk per child) or symlinking (fragile, wrong for
-  native deps). **This is not "add a git command", it is environment
-  provisioning for child processes.**
+- **A fresh worktree has no `node_modules`,** so `npm run check` fails there
+  with `biome: command not found` until something installs them. This is less
+  of an obstacle than it first appears: a cold `npm install` in a worktree
+  measured **3.5s** and every check then passed. It is a step to automate, not
+  a wall.
+- **Disk, at npm's marginal cost.** Each additional worktree consumed **354MB**
+  measured against filesystem free space. Three concurrent writers is roughly a
+  gigabyte per dispatch, created and destroyed.
 - **The parent's uncommitted work is invisible.** A worktree starts from a
   commit. Today's in-flight edits — the usual state — would not be there unless
   the parent commits or stashes first.
@@ -175,5 +176,34 @@ costs wall-clock only on multi-writer fan-outs, which are rare. Revisit
 worktrees if and when multi-writer parallelism proves it matters — and treat it
 then as the environment-provisioning project it really is, not a git flag.
 
-**Size:** ~5 lines for serialised writers. Worktrees, done properly, are a
-multi-day feature.
+**Size:** ~5 lines for serialised writers. Worktrees remain a real feature:
+install automation per tree, uncommitted-state handling, integration and
+cleanup.
+
+### Would pnpm help?
+
+Asked because pnpm's content-addressable store should make per-worktree
+`node_modules` nearly free. Measured, on this repo:
+
+| | npm | pnpm |
+|---|---|---|
+| Cold install in a worktree | 3.52s | 3.97s |
+| Disk consumed per extra worktree | 354MB | **7MB** |
+| `npm run check` afterwards | passes | **fails** |
+
+The disk result is real and large: 50× less per worktree, which is exactly the
+cost that makes many isolated children expensive. Speed is a wash.
+
+But pnpm currently **breaks the typecheck**. Its strict layout resolves two
+copies of `typebox` — `1.3.7` for `@earendil-works/pi-coding-agent` and
+`1.3.15` for this package — so `TObject` from one is not assignable to
+`TObject` from the other and `lib/reason/index.ts` fails to compile. npm hoists
+to a single copy and the types line up. Two quick fixes were tried and neither
+worked: a `pnpm.overrides` pin to `1.3.7` still produced both copies, and
+`node-linker=hoisted` in `.npmrc` did not take effect in the test.
+
+**Conclusion: do not switch now.** The only advantage pnpm offers here is disk
+cost per worktree, and worktrees are deferred, so the benefit is currently
+hypothetical while the broken typecheck is concrete. Revisit pnpm *together
+with* worktrees if they are ever built, and solve the typebox resolution
+properly at that point rather than with a flag.
