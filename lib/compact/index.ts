@@ -146,6 +146,27 @@ function headerFor(name: string, args: unknown, status: string, theme: Theme): s
 	].join(" ");
 }
 
+/**
+ * Drops a tool's own duration line, which the header already carries.
+ *
+ * pi's bash result rendering ends in `Took 0.0s`, added only when the render
+ * state holds a start time. Clearing that field before delegating removes the
+ * line without touching the output above it.
+ */
+export function withoutNativeDuration<TParams extends TSchema, TDetails, TState>(
+	base: ToolDefinition<TParams, TDetails, TState>,
+): ToolDefinition<TParams, TDetails, TState> {
+	const baseRenderResult = base.renderResult;
+	if (!baseRenderResult) return base;
+	return {
+		...base,
+		renderResult(result, options, theme, context) {
+			(context.state as { startedAt?: number }).startedAt = undefined;
+			return baseRenderResult(result, options, theme, context);
+		},
+	};
+}
+
 function textOutput(content: readonly { type: string; text?: string }[]): string {
 	return content
 		.filter((block) => block.type === "text")

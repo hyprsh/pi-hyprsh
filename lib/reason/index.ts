@@ -23,7 +23,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { Static, TObject, TSchema } from "typebox";
 import { Type } from "typebox";
-import { compact } from "../compact/index.ts";
+import { compact, withoutNativeDuration } from "../compact/index.ts";
 
 const REASONING = Type.String({
 	description:
@@ -85,7 +85,8 @@ const REGISTRARS: Record<string, (pi: ExtensionAPI, cwd: string) => void> = {
 	read: (pi, cwd) => pi.registerTool(compact(withReason(createReadToolDefinition(cwd)))),
 	write: (pi, cwd) => pi.registerTool(compact(withReason(createWriteToolDefinition(cwd)))),
 	edit: (pi, cwd) => pi.registerTool(compact(withReason(createEditToolDefinition(cwd)))),
-	bash: (pi, cwd) => pi.registerTool(compact(withReason(createBashToolDefinition(cwd)))),
+	bash: (pi, cwd) =>
+		pi.registerTool(compact(withoutNativeDuration(withReason(createBashToolDefinition(cwd))))),
 	grep: (pi, cwd) => pi.registerTool(compact(withReason(createGrepToolDefinition(cwd)))),
 	find: (pi, cwd) => pi.registerTool(compact(withReason(createFindToolDefinition(cwd)))),
 	ls: (pi, cwd) => pi.registerTool(compact(withReason(createLsToolDefinition(cwd)))),
