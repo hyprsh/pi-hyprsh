@@ -23,13 +23,20 @@ import { configPath } from "../config.ts";
  * month rather than billed per query. Nothing here can run up a bill, which is
  * what makes a wide fan-out safe.
  *
- * Brave sits directly after the subscriptions because it measures best of the
- * lot on independent agent-search benchmarks, on both relevance and latency,
- * but its free allowance is finite where a subscription is already paid for.
+ * The default order is by measured latency, because `auto` takes the first
+ * provider that answers and the spread is not a tuning difference. `openai` and
+ * `xai` are not search APIs: they are LLM calls that perform a search, so each
+ * one costs a full inference round-trip. Measured over five distinct queries,
+ * medians came out around 400ms for a local SearXNG, 1.3s for Exa, 1.4-4.2s for
+ * Brave, and 7.5-10.4s for the two subscription providers. Since this tool
+ * returns raw provider results either way, twenty times the wait buys nothing.
+ *
+ * Availability does the rest: a provider with no credential is skipped, so an
+ * install with nothing configured still lands on keyless Exa.
  */
-export type SearchProviderId = "openai" | "xai" | "brave" | "searxng" | "exa";
+export type SearchProviderId = "searxng" | "brave" | "exa" | "openai" | "xai";
 
-export const SEARCH_PROVIDER_IDS: SearchProviderId[] = ["openai", "xai", "brave", "searxng", "exa"];
+export const SEARCH_PROVIDER_IDS: SearchProviderId[] = ["searxng", "brave", "exa", "openai", "xai"];
 
 export interface WebSearchConfig {
 	/** Order tried by provider "auto"; the first available provider that answers wins. */
@@ -70,7 +77,7 @@ export interface WebConfig {
 }
 
 const DEFAULT_SEARCH: WebSearchConfig = {
-	priority: ["openai", "xai", "brave", "searxng", "exa"],
+	priority: ["searxng", "brave", "exa", "openai", "xai"],
 	timeoutMs: 60_000,
 	deadlineMs: 15_000,
 	cacheTtlMs: 300_000,

@@ -21,11 +21,11 @@ import { xaiProvider } from "./xai.ts";
 export type ProviderSelection = SearchProviderId | "auto" | "all";
 
 const PROVIDERS: Record<SearchProviderId, SearchProvider> = {
+	searxng: searxngProvider,
+	brave: braveProvider,
+	exa: exaProvider,
 	openai: openaiProvider,
 	xai: xaiProvider,
-	brave: braveProvider,
-	searxng: searxngProvider,
-	exa: exaProvider,
 };
 
 const TRACKING_PARAMS = /^(utm_|ref$|ref_src$|fbclid$|gclid$|mc_eid$|igshid$|spm$|source$)/i;
