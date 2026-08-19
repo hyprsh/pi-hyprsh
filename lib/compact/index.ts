@@ -8,10 +8,10 @@
  * success / error tint are re-applied here, so the block still reads as one
  * unit and still shows its status.
  *
- * The call line also ends in the time the call took, measured from the frame
- * that started execution to the frame that carried the final result. Calls
- * replayed from a session are not timed, since their execution happened in
- * another process.
+ * The call line also ends in the time the call took, measured around `execute`
+ * itself, so it is the real duration and does not depend on when the row was
+ * repainted. Calls replayed from a session are not timed, since their execution
+ * happened in another process.
  */
 
 import { keyHint, type Theme, type ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -27,8 +27,25 @@ type Tint = "toolPendingBg" | "toolSuccessBg" | "toolErrorBg";
 
 /** Namespaced, because the wrapped tool renders with the same state object. */
 interface Timing {
-	compactStartedAt?: number;
-	compactEndedAt?: number;
+	compactMs?: number;
+}
+
+/**
+ * Durations handed from `execute` to the first render that follows it.
+ *
+ * A render moves the value onto the row's own state, so the map only holds
+ * calls that have not been painted yet. The cap covers the case where that
+ * render never comes, such as a non-TUI host.
+ */
+const DURATIONS = new Map<string, number>();
+const MAX_PENDING_DURATIONS = 64;
+
+function recordDuration(toolCallId: string, ms: number): void {
+	if (DURATIONS.size >= MAX_PENDING_DURATIONS) {
+		const oldest = DURATIONS.keys().next();
+		if (!oldest.done) DURATIONS.delete(oldest.value);
+	}
+	DURATIONS.set(toolCallId, ms);
 }
 
 function tintFor(isPartial: boolean, isError: boolean): Tint {
@@ -82,15 +99,14 @@ function appendSuffix(lines: string[], suffix: string, width: number): string[] 
 	return lines.map((current, i) => (i === index ? line + suffix : current));
 }
 
-/** Timed only when the call was seen running, so replayed history stays unlabelled. */
-function elapsed(state: Timing, executionStarted: boolean, isPartial: boolean): number | undefined {
-	if (isPartial) {
-		if (executionStarted) state.compactStartedAt ??= Date.now();
-		return undefined;
+/** Timed only when this process ran the call, so replayed history stays unlabelled. */
+function elapsed(state: Timing, toolCallId: string): number | undefined {
+	const recorded = DURATIONS.get(toolCallId);
+	if (recorded !== undefined) {
+		state.compactMs = recorded;
+		DURATIONS.delete(toolCallId);
 	}
-	if (state.compactStartedAt === undefined) return undefined;
-	state.compactEndedAt ??= Date.now();
-	return state.compactEndedAt - state.compactStartedAt;
+	return state.compactMs;
 }
 
 /** Same shape as pi's own duration label. */
@@ -136,9 +152,18 @@ export function compact<TParams extends TSchema, TDetails, TState>(
 		...base,
 		renderShell: "self",
 
+		async execute(toolCallId, params, signal, onUpdate, ctx) {
+			const startedAt = Date.now();
+			try {
+				return await base.execute(toolCallId, params, signal, onUpdate, ctx);
+			} finally {
+				recordDuration(toolCallId, Date.now() - startedAt);
+			}
+		},
+
 		renderCall(args, theme, context) {
 			const frame = context.lastComponent instanceof Framed ? context.lastComponent : new Framed();
-			const ms = elapsed(context.state as Timing, context.executionStarted, context.isPartial);
+			const ms = elapsed(context.state as Timing, context.toolCallId);
 			const suffix = ms === undefined ? "" : theme.fg("muted", ` ${formatDuration(ms)}`);
 			frame.setFrame(theme, tintFor(context.isPartial, context.isError), suffix);
 			frame.setInner(
