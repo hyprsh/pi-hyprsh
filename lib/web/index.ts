@@ -9,6 +9,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { compact } from "../compact/index.ts";
+import { withReason } from "../reason/index.ts";
 import { loadWebConfig, SEARCH_PROVIDER_IDS } from "./config.ts";
 import { fetchUrl } from "./fetch/index.ts";
 import { type ProviderSelection, runSearch } from "./search/index.ts";
@@ -89,112 +90,119 @@ function formatResults(results: SearchResult[]): string {
 
 export function registerWeb(pi: ExtensionAPI): void {
 	pi.registerTool(
-		compact({
-			name: "web_search",
-			label: "Web Search",
-			description:
-				"Search the web and return normalized results (title, url, snippet, publishedAt, provider). Results are raw provider output, never a model-written answer, so read the sources with web_fetch when the snippets are not enough. provider defaults to auto, which tries the configured providers in priority order and falls back on failure; all queries every configured provider at once and merges deduplicated results, reporting any that missed the deadline.",
-			promptSnippet: "Search the web and get back normalized, deduplicated results with visible sources.",
-			parameters: Type.Object({
-				query: Type.String({ description: "What to search for." }),
-				provider: Type.Optional(
-					StringEnum(
-						SELECTIONS,
-						"Search backend. auto (default) uses the configured priority order; all queries every configured provider concurrently and returns whichever answered before the deadline.",
+		compact(
+			withReason({
+				name: "web_search",
+				label: "Web Search",
+				description:
+					"Search the web and return normalized results (title, url, snippet, publishedAt, provider). Results are raw provider output, never a model-written answer, so read the sources with web_fetch when the snippets are not enough. provider defaults to auto, which tries the configured providers in priority order and falls back on failure; all queries every configured provider at once and merges deduplicated results, reporting any that missed the deadline.",
+				promptSnippet: "Search the web and get back normalized, deduplicated results with visible sources.",
+				parameters: Type.Object({
+					query: Type.String({ description: "What to search for." }),
+					provider: Type.Optional(
+						StringEnum(
+							SELECTIONS,
+							"Search backend. auto (default) uses the configured priority order; all queries every configured provider concurrently and returns whichever answered before the deadline.",
+						),
 					),
-				),
-				limit: Type.Optional(
-					Type.Integer({
-						minimum: 1,
-						maximum: MAX_LIMIT,
-						description: `Maximum results (default ${DEFAULT_LIMIT}, max ${MAX_LIMIT}).`,
-					}),
-				),
-				recency: Type.Optional(StringEnum(RECENCIES, "Only consider pages published within this window.")),
-				domains: Type.Optional(
-					Type.Array(Type.String(), {
-						description:
-							'Hostnames to restrict to; prefix with "-" to exclude, e.g. ["docs.python.org", "-reddit.com"].',
-					}),
-				),
+					limit: Type.Optional(
+						Type.Integer({
+							minimum: 1,
+							maximum: MAX_LIMIT,
+							description: `Maximum results (default ${DEFAULT_LIMIT}, max ${MAX_LIMIT}).`,
+						}),
+					),
+					recency: Type.Optional(StringEnum(RECENCIES, "Only consider pages published within this window.")),
+					domains: Type.Optional(
+						Type.Array(Type.String(), {
+							description:
+								'Hostnames to restrict to; prefix with "-" to exclude, e.g. ["docs.python.org", "-reddit.com"].',
+						}),
+					),
+				}),
+
+				async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+					const config = loadWebConfig();
+					const request = buildRequest(params);
+					const selection = (params.provider ?? "auto") as ProviderSelection;
+
+					const run = await runSearch(request, selection, { config: config.search, ctx, signal });
+					const attempted = run.outcomes
+						.map((outcome) =>
+							outcome.ok
+								? `${outcome.provider} (${outcome.count})`
+								: `${outcome.provider} failed: ${outcome.error}`,
+						)
+						.join(", ");
+
+					const header = `${run.results.length} result${run.results.length === 1 ? "" : "s"} for "${request.query}" · ${attempted}`;
+					const text = run.results.length === 0 ? header : `${header}\n\n${formatResults(run.results)}`;
+
+					return {
+						content: [{ type: "text", text }],
+						details: { query: request.query, selection, results: run.results, providers: run.outcomes },
+					};
+				},
 			}),
-
-			async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-				const config = loadWebConfig();
-				const request = buildRequest(params);
-				const selection = (params.provider ?? "auto") as ProviderSelection;
-
-				const run = await runSearch(request, selection, { config: config.search, ctx, signal });
-				const attempted = run.outcomes
-					.map((outcome) =>
-						outcome.ok
-							? `${outcome.provider} (${outcome.count})`
-							: `${outcome.provider} failed: ${outcome.error}`,
-					)
-					.join(", ");
-
-				const header = `${run.results.length} result${run.results.length === 1 ? "" : "s"} for "${request.query}" · ${attempted}`;
-				const text = run.results.length === 0 ? header : `${header}\n\n${formatResults(run.results)}`;
-
-				return {
-					content: [{ type: "text", text }],
-					details: { query: request.query, selection, results: run.results, providers: run.outcomes },
-				};
-			},
-		}),
+		),
 	);
 
 	pi.registerTool(
-		compact({
-			name: "web_fetch",
-			label: "Web Fetch",
-			description:
-				"Fetch a URL and return its readable content. HTML is reduced to the main article with Mozilla Readability and converted to Markdown; PDF, text, JSON and XML are returned as text. Private, loopback and link-local addresses are refused, redirects are bounded, and the response is size- and time-capped.",
-			promptSnippet: "Fetch one URL and read its main content as Markdown or text.",
-			parameters: Type.Object({
-				url: Type.String({ description: "Absolute http(s) URL to fetch." }),
-				maxChars: Type.Optional(
-					Type.Integer({
-						minimum: 500,
-						description: "Truncate the extracted content to this many characters.",
-					}),
-				),
+		compact(
+			withReason({
+				name: "web_fetch",
+				label: "Web Fetch",
+				description:
+					"Fetch a URL and return its readable content. HTML is reduced to the main article with Mozilla Readability and converted to Markdown; PDF, text, JSON and XML are returned as text. Private, loopback and link-local addresses are refused, redirects are bounded, and the response is size- and time-capped.",
+				promptSnippet: "Fetch one URL and read its main content as Markdown or text.",
+				parameters: Type.Object({
+					url: Type.String({ description: "Absolute http(s) URL to fetch." }),
+					maxChars: Type.Optional(
+						Type.Integer({
+							minimum: 500,
+							description: "Truncate the extracted content to this many characters.",
+						}),
+					),
+				}),
+
+				async execute(_toolCallId, params, signal) {
+					const config = loadWebConfig();
+					const url = params.url?.trim();
+					if (!url) throw new Error("url must be a non-empty string");
+					if (
+						params.maxChars !== undefined &&
+						(!Number.isInteger(params.maxChars) || params.maxChars < 500)
+					) {
+						throw new Error("maxChars must be an integer of at least 500");
+					}
+
+					const outcome = await fetchUrl(url, { config: config.fetch, maxChars: params.maxChars, signal });
+					const header = [
+						outcome.url,
+						[
+							outcome.title,
+							outcome.mime,
+							outcome.method,
+							`${outcome.chars} chars${outcome.truncated ? " (truncated)" : ""}`,
+						]
+							.filter(Boolean)
+							.join(" · "),
+					].join("\n");
+
+					return {
+						content: [{ type: "text", text: `${header}\n\n${outcome.content}` }],
+						details: {
+							url: outcome.url,
+							title: outcome.title,
+							mime: outcome.mime,
+							method: outcome.method,
+							chars: outcome.chars,
+							truncated: outcome.truncated,
+							bytes: outcome.bytes,
+						},
+					};
+				},
 			}),
-
-			async execute(_toolCallId, params, signal) {
-				const config = loadWebConfig();
-				const url = params.url?.trim();
-				if (!url) throw new Error("url must be a non-empty string");
-				if (params.maxChars !== undefined && (!Number.isInteger(params.maxChars) || params.maxChars < 500)) {
-					throw new Error("maxChars must be an integer of at least 500");
-				}
-
-				const outcome = await fetchUrl(url, { config: config.fetch, maxChars: params.maxChars, signal });
-				const header = [
-					outcome.url,
-					[
-						outcome.title,
-						outcome.mime,
-						outcome.method,
-						`${outcome.chars} chars${outcome.truncated ? " (truncated)" : ""}`,
-					]
-						.filter(Boolean)
-						.join(" · "),
-				].join("\n");
-
-				return {
-					content: [{ type: "text", text: `${header}\n\n${outcome.content}` }],
-					details: {
-						url: outcome.url,
-						title: outcome.title,
-						mime: outcome.mime,
-						method: outcome.method,
-						chars: outcome.chars,
-						truncated: outcome.truncated,
-						bytes: outcome.bytes,
-					},
-				};
-			},
-		}),
+		),
 	);
 }
