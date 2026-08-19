@@ -191,6 +191,20 @@ function fallbackResult(output: string, expanded: boolean, theme: Theme): Compon
 }
 
 /**
+ * Whether wrapped tools take over their own frame.
+ *
+ * Every tool this pack registers is wrapped at definition time, long before a
+ * feature flag could be threaded to each call site, so the switch lives here
+ * and index.ts sets it once before anything registers. Off, `compact` hands
+ * the definition straight back and pi frames the call itself.
+ */
+let enabled = true;
+
+export function configureCompact(on: boolean): void {
+	enabled = on;
+}
+
+/**
  * Wraps a tool so its call block renders without pi's padding lines. Call and
  * result rendering are delegated untouched; only the frame around them and the
  * duration on the call line are added.
@@ -198,6 +212,8 @@ function fallbackResult(output: string, expanded: boolean, theme: Theme): Compon
 export function compact<TParams extends TSchema, TDetails, TState>(
 	base: ToolDefinition<TParams, TDetails, TState>,
 ): ToolDefinition<TParams, TDetails, TState> {
+	if (!enabled) return base;
+
 	const baseRenderCall = base.renderCall;
 	const baseRenderResult = base.renderResult;
 

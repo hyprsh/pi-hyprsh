@@ -7,6 +7,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerAsk } from "./lib/ask/index.ts";
+import { configureCompact } from "./lib/compact/index.ts";
 import { loadConfig } from "./lib/config.ts";
 import { registerConstitution } from "./lib/constitution/index.ts";
 import { registerContext } from "./lib/context/index.ts";
@@ -18,6 +19,9 @@ import { registerWeb } from "./lib/web/index.ts";
 
 export default function (pi: ExtensionAPI) {
 	const config = loadConfig();
+
+	// Tools are wrapped as they are defined below, so the switch has to be set first.
+	configureCompact(config.features.compact);
 
 	if (config.features.footer) registerFooter(pi, config.footer);
 	if (config.features.reason) registerReason(pi);

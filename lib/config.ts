@@ -37,6 +37,7 @@ export interface Config {
 	features: {
 		footer: boolean;
 		reason: boolean;
+		compact: boolean;
 		context: boolean;
 		web: boolean;
 		constitution: boolean;
@@ -51,6 +52,7 @@ const DEFAULTS: Config = {
 	features: {
 		footer: true,
 		reason: true,
+		compact: true,
 		context: true,
 		web: true,
 		constitution: true,
@@ -125,6 +127,7 @@ export function loadConfig(path = configPath()): Config {
 		features: {
 			footer: bool(features.footer, DEFAULTS.features.footer),
 			reason: bool(features.reason, DEFAULTS.features.reason),
+			compact: bool(features.compact, DEFAULTS.features.compact),
 			context: bool(features.context, DEFAULTS.features.context),
 			web: bool(features.web, DEFAULTS.features.web),
 			constitution: bool(features.constitution, DEFAULTS.features.constitution),
