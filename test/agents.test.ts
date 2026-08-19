@@ -6,9 +6,12 @@
  */
 
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, test } from "node:test";
 import type { Usage } from "@earendil-works/pi-ai";
-import { agentDefinitions } from "../lib/agents/definitions.ts";
+import { type AgentDefinition, loadAgentDefinitions, writes } from "../lib/agents/definitions.ts";
 import { CHEAPEST } from "../lib/agents/model.ts";
 import { readVerdict, stripVerdict } from "../lib/agents/run.ts";
 import { type AgentRun, addUsage, emptyUsage, succeeded } from "../lib/agents/types.ts";
@@ -107,33 +110,165 @@ describe("addUsage", () => {
 	});
 });
 
-describe("agentDefinitions", () => {
+/**
+ * The packaged roster only. `agentDefinitions()` layers whatever is in the
+ * developer's own ~/.pi/agent/hypr/agents over it, so asserting the shipped
+ * agents through it would pass or fail on a machine's contents rather than the
+ * repository's.
+ */
+const packaged = () => loadAgentDefinitions(join(tmpdir(), "hyprsh-no-user-agents"));
+
+describe("packaged agent definitions", () => {
 	// lib/task classifies a child as a writer by this exact test, and only writers
 	// are serialised. An agent that gains `write` without gaining `edit`, or a new
 	// writing agent altogether, must not slip through as read-only.
 	test("an agent that can edit can also write", () => {
-		for (const agent of agentDefinitions()) {
+		for (const agent of packaged()) {
 			if (agent.tools.includes("edit")) assert.ok(agent.tools.includes("write"), agent.name);
 		}
 	});
 
 	test("every definition on disk parses and names its tools", () => {
-		const names = agentDefinitions().map((agent) => agent.name);
+		const names = packaged().map((agent) => agent.name);
 		assert.deepEqual([...names].sort(), ["reviewer", "scout", "worker"]);
 	});
 
 	test("scout asks for the cheapest model; the writing agent does not", () => {
-		const models = Object.fromEntries(agentDefinitions().map((agent) => [agent.name, agent.model]));
+		const models = Object.fromEntries(packaged().map((agent) => [agent.name, agent.model]));
 		assert.equal(models.scout, CHEAPEST);
 		assert.equal(models.worker, undefined, "a weaker model must not be writing the code");
 		assert.equal(models.reviewer, undefined, "a weaker model must not be judging the work");
 	});
 
 	test("worker is the only agent that writes", () => {
-		const writers = agentDefinitions()
-			.filter((agent) => agent.tools.includes("write"))
+		const writers = packaged()
+			.filter(writes)
 			.map((agent) => agent.name);
 		assert.deepEqual(writers, ["worker"]);
+	});
+
+	// Omitting --thinking leaves the child on the user's own global level, which
+	// is the right default: measured on a scout task, low and high produced 311
+	// and 328 reasoning tokens, so a shipped level would have bought nothing.
+	test("no shipped agent pins a thinking level", () => {
+		for (const agent of packaged()) assert.equal(agent.thinking, undefined, agent.name);
+	});
+});
+
+/**
+ * ~/.pi/agent/hypr/agents is the only way to change a shipped agent without
+ * editing a packaged file that the next update overwrites. A file there stands
+ * in for the packaged agent whole, so nothing about a dispatch depends on a
+ * merge the reader cannot see.
+ */
+describe("loadAgentDefinitions", () => {
+	function userDir(files: Record<string, string>): string {
+		const dir = mkdtempSync(join(tmpdir(), "hyprsh-agents-"));
+		for (const [name, contents] of Object.entries(files)) {
+			writeFileSync(join(dir, name), contents, "utf-8");
+		}
+		return dir;
+	}
+
+	const byName = (agents: ReturnType<typeof loadAgentDefinitions>, name: string) =>
+		agents.find((agent) => agent.name === name);
+
+	test("an absent user directory leaves the packaged roster alone", () => {
+		const agents = loadAgentDefinitions(join(tmpdir(), "hyprsh-no-such-agents-dir"));
+		assert.deepEqual(
+			agents.map((agent) => agent.name),
+			["reviewer", "scout", "worker"],
+		);
+	});
+
+	test("a file of the same name replaces the packaged agent whole", () => {
+		const agents = loadAgentDefinitions(
+			userDir({
+				"scout.md": [
+					"---",
+					"name: scout",
+					"description: My own scout.",
+					"tools: read, grep",
+					"model: sonnet",
+					"thinking: high",
+					"---",
+					"",
+					"Look, then stop.",
+				].join("\n"),
+			}),
+		);
+		const scout = byName(agents, "scout");
+		assert.equal(agents.length, 3, "replacing an agent must not add one");
+		assert.equal(scout?.model, "sonnet");
+		assert.equal(scout?.thinking, "high");
+		assert.deepEqual(scout?.tools, ["read", "grep"]);
+		assert.equal(scout?.systemPrompt, "Look, then stop.");
+	});
+
+	test("a file naming an agent that does not ship joins the roster", () => {
+		const agents = loadAgentDefinitions(
+			userDir({
+				"auditor.md": "---\nname: auditor\ndescription: Reads licences.\ntools: read\n---\n\nAudit.",
+			}),
+		);
+		assert.equal(byName(agents, "auditor")?.description, "Reads licences.");
+		assert.equal(byName(agents, "scout")?.model, CHEAPEST, "the packaged agents are untouched");
+	});
+
+	// A child inherits this pack, so `task` exists inside it. The allowlist is the
+	// only thing keeping fan-out from nesting, and a user file is not exempt.
+	test("a user agent cannot grant itself the delegation tool", () => {
+		const agents = loadAgentDefinitions(
+			userDir({
+				"boss.md": "---\nname: boss\ndescription: Delegates.\ntools: read, task\n---\n\nDelegate.",
+			}),
+		);
+		assert.deepEqual(byName(agents, "boss")?.tools, ["read"]);
+	});
+
+	// A hand-written file is re-read on every start, so one bad edit must cost the
+	// agent it names and nothing else.
+	test("a user file with no usable tools is skipped, keeping the packaged agent", () => {
+		const agents = loadAgentDefinitions(
+			userDir({ "scout.md": "---\nname: scout\ndescription: Broken.\n---\n\nNothing." }),
+		);
+		assert.equal(byName(agents, "scout")?.model, CHEAPEST);
+		assert.equal(agents.length, 3);
+	});
+
+	// lib/task runs readers together and writers one at a time, in one shared
+	// tree. An agent counted as a reader because it has `edit` but not `write`
+	// would run concurrently with another writer and be refused writable paths.
+	test("an agent with edit but no write still counts as a writer", () => {
+		const agents = loadAgentDefinitions(
+			userDir({
+				"patcher.md": "---\nname: patcher\ndescription: Patches.\ntools: read, edit\n---\n\nPatch.",
+			}),
+		);
+		assert.equal(writes(byName(agents, "patcher") as AgentDefinition), true);
+	});
+
+	// The name becomes a filename in lib/agents/run.ts, which writes the system
+	// prompt to it. A name carrying a path would write outside the temp directory.
+	test("a name that is not a plain identifier is refused", () => {
+		const agents = loadAgentDefinitions(
+			userDir({
+				"evil.md": '---\nname: "../../pwned"\ndescription: Escapes.\ntools: read\n---\n\nEscape.',
+			}),
+		);
+		assert.deepEqual(
+			agents.map((agent) => agent.name),
+			["reviewer", "scout", "worker"],
+		);
+	});
+
+	test("a thinking level pi does not know is dropped rather than passed to the child", () => {
+		const agents = loadAgentDefinitions(
+			userDir({
+				"scout.md": "---\nname: scout\ndescription: Mine.\ntools: read\nthinking: very-hard\n---\n\nGo.",
+			}),
+		);
+		assert.equal(byName(agents, "scout")?.thinking, undefined);
 	});
 });
 

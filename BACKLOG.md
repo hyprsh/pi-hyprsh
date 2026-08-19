@@ -50,20 +50,26 @@ instead.
 
 ## 3. Cheap models for cheap agents — *done*
 
-`lib/agents/model.ts` resolves a child's model from one field: an
-`agents.models` entry in `pi-hyprsh.json` wins, otherwise the `model` line in
-the definition's frontmatter. The value is a model ID, a `provider/id`, or
+`lib/agents/model.ts` resolves a child's model from one place: the `model` line
+in the definition's frontmatter. The value is a model ID, a `provider/id`, or
 `cheapest`, which resolves to the least expensive model the registry reports as
 available *on the session's own provider*. Anything named but unavailable is
-dropped in favour of inheriting, so a config written for one provider cannot
+dropped in favour of inheriting, so a definition written for one provider cannot
 break dispatch on another.
+
+A config layer over the top was tried and removed. Two sources for one setting
+meant reading two files to know what a dispatch would do, and the config key had
+to restate the roster. The seam is a file instead:
+`~/.pi/agent/hypr/agents/<name>.md` replaces a packaged agent whole, or adds a
+new one. `hypr/` is also where `config.json` now lives, so the pack keeps one
+directory rather than a loose file plus an implicit one.
 
 `scout` declares `model: cheapest`; `reviewer` and `worker` deliberately name
 nothing. An earlier cut had a separate `tier: cheap` field, which was one
 vocabulary too many for what is just a model name.
 
-Thinking level is a separate axis, settable only in config via
-`agents.thinking`. **No default ships, and the reason is measured.** An earlier
+Thinking level is a separate axis, set by the definition's `thinking` field.
+**No default ships, and the reason is measured.** An earlier
 commit claimed a child left at `high` "spends the saving straight back". That
 was asserted, not tested, and it is wrong: `budget_tokens` is a ceiling rather
 than a target, and the same scout task used 311 reasoning tokens at `low`

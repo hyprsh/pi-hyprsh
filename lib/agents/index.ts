@@ -8,8 +8,16 @@
  * methodology does.
  */
 
-export { type AgentDefinition, agentDefinitions, findAgent } from "./definitions.ts";
 export {
+	type AgentDefinition,
+	agentDefinitions,
+	findAgent,
+	loadAgentDefinitions,
+	userAgentsDir,
+	writes,
+} from "./definitions.ts";
+export {
+	type AgentModelRequest,
 	CHEAPEST,
 	type ModelChoice,
 	type ModelRef,

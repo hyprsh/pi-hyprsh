@@ -34,9 +34,16 @@ export interface ModelChoice {
 	cost?: { input?: number; output?: number };
 }
 
+/**
+ * What an agent definition asks for. Neither field is trusted: the model is
+ * matched against the live registry and the level against pi's own set, both
+ * because the definition may be a hand-written file in ~/.pi/agent/hypr/agents.
+ */
 export interface AgentModelRequest {
 	/** A model ID, `provider/id`, or `cheapest`. Absent means inherit. */
 	model?: string;
+	/** An explicit level. Absent means the child follows the session's. */
+	thinking?: ThinkingLevel;
 }
 
 /** Provider and ID together, because an ID alone does not identify a model. */
@@ -59,16 +66,10 @@ export function isThinkingLevel(value: unknown): value is ThinkingLevel {
 	return typeof value === "string" && (THINKING_LEVELS as readonly string[]).includes(value);
 }
 
-/** Per-agent overrides from pi-hyprsh.json. Both are checked before use, never trusted. */
-export interface AgentOverride {
-	model?: string;
-	thinking?: ThinkingLevel;
-}
-
 export interface Resolution {
 	/** `undefined` means inherit the dispatching session's model. */
 	model?: ModelRef;
-	/** An explicit level to pass, from config or the agent's own definition. */
+	/** An explicit level to pass, from the agent's own definition. */
 	thinking?: ThinkingLevel;
 	/** True when the child follows the session for both model and thinking level. */
 	inheritThinking: boolean;
@@ -99,17 +100,16 @@ function cheapest(available: readonly ModelChoice[], provider: string): ModelCho
 
 export function resolveAgentModel(
 	request: AgentModelRequest,
-	override: AgentOverride | undefined,
 	available: readonly ModelChoice[],
 	session: { id?: string; provider?: string } | undefined,
 ): Resolution {
 	// Set independently of the model: how hard to think and which model to think
-	// with are separate questions, and only the user answers this one.
-	const thinking = override?.thinking;
+	// with are separate questions, and a cheap model does not imply cheap thinking.
+	const thinking = request.thinking;
 	const withThinking = (resolution: Resolution): Resolution =>
 		thinking ? { ...resolution, thinking, inheritThinking: false } : resolution;
 
-	const requested = override?.model?.trim() || request.model?.trim();
+	const requested = request.model?.trim();
 	if (!requested) return withThinking(INHERIT);
 
 	const pick =
@@ -118,7 +118,7 @@ export function resolveAgentModel(
 				? cheapest(available, session.provider)
 				: undefined
 			: // `provider/id` is accepted as well as a bare ID, so a user who has
-				// already hit the ambiguity can spell their way out of it in config.
+				// already hit the ambiguity can spell their way out of it.
 				available.find((model) => model.id === requested || qualify(model) === requested);
 
 	// `cheapest` naming nothing is not a mistake worth reporting: it means this

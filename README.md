@@ -19,7 +19,7 @@ No build step — Pi loads the TypeScript through jiti. Requires Node 22.19+ and
 
 Only one extension may own the footer. `web_search` / `web_fetch` collide with `pi-web-access`, `ask_user_question` with `@juicesharp/rpiv-ask-user-question`, and `todo` / `/todos` with `@juicesharp/rpiv-todo`. Do not run those alongside this pack.
 
-`task` spawns child pi processes that run tools with your permissions. A child inherits this pack, and its tool allowlist never includes `task`, so delegation cannot nest. `scout` and `reviewer` have no `write` or `edit` tool, but they do have `bash`, so they are no-edit rather than sandboxed. Agents are defined in [`lib/agents/definitions/`](lib/agents/definitions) and children inherit the dispatching session's model unless a definition names its own.
+`task` spawns child pi processes that run tools with your permissions. A child inherits this pack, and its tool allowlist never includes `task`, so delegation cannot nest. `scout` and `reviewer` have no `write` or `edit` tool, but they do have `bash`, so they are no-edit rather than sandboxed. Agents ship in [`lib/agents/definitions/`](lib/agents/definitions), a file in `~/.pi/agent/hypr/agents/` replaces one of them or adds your own, and children inherit the dispatching session's model unless a definition names one.
 
 ## Features
 
@@ -33,7 +33,7 @@ Only one extension may own the footer. `web_search` / `web_fetch` collide with `
 | **Ask** | `ask_user_question` puts up to four questions to you with 2-4 written-out options each — the recommended one first and labelled `(recommended)` — a free-text row and optional multi-select, instead of the model guessing. Multi-question runs are prefixed `[1/3]` so you see where you are. Built on pi's own dialogs, so it works in TUI and RPC hosts. |
 | **Thinking** | A middle ground between pi's `hideThinkingBlock` on and off: once a thinking block is finished it collapses to one line per thought — bold section headers kept whole, every other paragraph reduced to its opening sentence, list items one line each, capped at 12 lines with a `… 8 more lines` marker. Streaming reasoning is left untouched so you can still watch it live. Display-only: the full text stays in the session and in model context. Set `"thinking": { "mode": "full" }` to turn it off. |
 | **Todo** | A `todo` tool the model calls with the whole task list, a panel above the editor showing progress as `Todos (2/7)` with ✔ ▶ ○ ⊘ rows, and `/todos` to print the list. Each result carries the post-call snapshot and the list is replayed from the session branch, so it survives `/reload`, forks and compaction with no disk writes. A step the model decides against stays in the list as `skipped` and must carry a reason, so a plan cannot quietly lose work. The panel caps at 12 lines — settled rows are dropped first — and disappears once everything is done. |
-| **Task** | A `task` tool that delegates bounded work to child agents, each a separate pi process with its own context window. The brief is a schema rather than a convention: goal, context, acceptance criteria and verification commands are required fields, so an assignment a child could not act on alone cannot be sent, and the standing prohibitions — no nested delegation, no out-of-scope edits, no unverified completion — are added rather than asked for. Writable scope is a list of paths, so two units claiming the same file, or a writable path handed to a read-only agent, are rejected before anything spawns. Results put the child's verdict next to the files and commands the runtime observed from its tool calls, so a claim and the evidence for it can be seen to disagree. Fan-out is measured against your remaining subscription quota: refused past the critical threshold, serialised past the warning one. Bundled agents are `scout` (read-only recon), `reviewer` (read-only critique) and `worker` (bounded implementation). `scout` asks for `model: cheapest` and so runs on the least expensive model your current provider offers, since reconnaissance is search and summarise; `reviewer` and `worker` name no model and keep the session's, so review quality and written code are untouched. Override per agent with `agents.models`, as `provider/id` or a bare id, checked against the live model registry and ignored if it is not available — so a config written for one provider cannot break dispatch on another. Children are always spawned with the provider spelled out, since 221 of the models pi ships share an id with another provider. Thinking level is separate and ships no default: children follow your global `defaultThinkingLevel` unless you pin one per agent with `agents.thinking`. Measured on a scout task, `low` and `high` produced 311 and 328 reasoning tokens respectively — the budget is a ceiling, not a target, so a shipped default would have bought nothing. |
+| **Task** | A `task` tool that delegates bounded work to child agents, each a separate pi process with its own context window. The brief is a schema rather than a convention: goal, context, acceptance criteria and verification commands are required fields, so an assignment a child could not act on alone cannot be sent, and the standing prohibitions — no nested delegation, no out-of-scope edits, no unverified completion — are added rather than asked for. Writable scope is a list of paths, so two units claiming the same file, or a writable path handed to a read-only agent, are rejected before anything spawns. Results put the child's verdict next to the files and commands the runtime observed from its tool calls, so a claim and the evidence for it can be seen to disagree. Fan-out is measured against your remaining subscription quota: refused past the critical threshold, serialised past the warning one. Bundled agents are `scout` (read-only recon), `reviewer` (read-only critique) and `worker` (bounded implementation). `scout` asks for `model: cheapest` and so runs on the least expensive model your current provider offers, since reconnaissance is search and summarise; `reviewer` and `worker` name no model and keep the session's, so review quality and written code are untouched. Change either by dropping a definition of your own in `~/.pi/agent/hypr/agents/`: `model` takes `provider/id`, a bare id or `cheapest`, checked against the live model registry and ignored if it is not available — so a definition written for one provider cannot break dispatch on another. Children are always spawned with the provider spelled out, since 221 of the models pi ships share an id with another provider. Thinking level is a separate field and ships no default: children follow your global `defaultThinkingLevel` unless a definition pins `thinking`. Measured on a scout task, `low` and `high` produced 311 and 328 reasoning tokens respectively — the budget is a ceiling, not a target, so a shipped default would have bought nothing. |
 | **Constitution** | [`lib/constitution/AGENTS.md`](lib/constitution/AGENTS.md) — truthfulness, safety, and the rules against claiming unverified work or weakening a check — appended to the system prompt each turn. Only what must never be one file read away from being skipped: 478 tokens always on, down from 755 before the method moved into the skill. Delete a duplicate `~/.pi/agent/AGENTS.md` or the rules are sent twice. |
 | **Skill** | [`skills/hyprmode`](skills/hyprmode) — the working method, loaded on demand. One skill carrying an inline index: five playbooks (investigation, bug fix, feature, refactoring, prototype) and fourteen principles across craft, architecture, verification and delegation, each indexed by one line naming when it applies. The full text sits in leaf files read only when a principle fires, so roughly 5,300 tokens of guidance costs 74 tokens of always-on description. Playbook steps are copied into the todo list verbatim, and a step you decline stays there as `skipped` with its reason. |
 
@@ -43,16 +43,12 @@ The default order is by measured latency, since `auto` takes the first provider 
 
 ## Configuration
 
-`~/.pi/agent/hypr/config.json`. Everything is optional and every feature is on by default.
+`~/.pi/agent/hypr/config.json`. Everything is optional and every feature is on by default. Agent definitions live beside it in `~/.pi/agent/hypr/agents/`; see [Agents](#agents).
 
 ```json
 {
   "features": { "footer": true, "reason": true, "compact": true, "context": true, "web": true, "constitution": true, "ask": true, "todo": true, "task": true },
   "thinking": { "mode": "summary" },
-  "agents": {
-    "models": { "scout": "anthropic/claude-haiku-4-5" },
-    "thinking": { "scout": "low" }
-  },
   "footer": {
     "segments": { "cwd": true, "model": true, "tps": true, "context": true, "quota": true },
     "thresholds": { "warning": 70, "critical": 90 }
@@ -80,6 +76,24 @@ The default order is by measured latency, since `auto` takes the first provider 
 ```
 
 A missing or malformed file falls back to defaults. The `web` section is validated instead, and an invalid key fails the next tool call naming the offending path rather than breaking startup.
+
+## Agents
+
+The three bundled agents are markdown files in [`lib/agents/definitions/`](lib/agents/definitions). They are packaged, so editing them in place is lost on the next update. Put your own in `~/.pi/agent/hypr/agents/<name>.md` instead:
+
+```markdown
+---
+name: scout
+description: Read-only reconnaissance. Returns a compressed answer, not a file dump.
+tools: read, grep, find, ls, bash
+model: anthropic/claude-haiku-4-5
+thinking: low
+---
+
+You are a scout. You answer one narrow question about a codebase and stop.
+```
+
+`name`, `description` and `tools` are required; `model` and `thinking` are optional and mean inherit the session's when absent. A file whose `name` matches a bundled agent replaces it whole — prompt, tools and all — so what runs is exactly the file you can read. A file naming an agent that does not ship joins the roster. `task` is stripped from every allowlist whatever the file says, so a hand-written agent still cannot delegate further. A file that fails to parse is skipped and the bundled agent stands, rather than the pack failing to load.
 
 ## Credentials
 

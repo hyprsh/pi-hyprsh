@@ -27,9 +27,10 @@ import {
 	qualify,
 	resolveAgentModel,
 	runAgent,
+	writes,
 } from "../agents/index.ts";
 import { compact } from "../compact/index.ts";
-import type { AgentsConfig, Thresholds } from "../config.ts";
+import type { Thresholds } from "../config.ts";
 import { fetchQuota } from "../quota/index.ts";
 import { withReason } from "../reason/index.ts";
 import { type Brief, briefSchema, conflicts, renderBrief } from "./brief.ts";
@@ -105,10 +106,10 @@ export async function dispatchPhased<T, R>(
 	return results;
 }
 
-export function registerTask(pi: ExtensionAPI, thresholds: Thresholds, agents: AgentsConfig): void {
+export function registerTask(pi: ExtensionAPI, thresholds: Thresholds): void {
 	const definitions = agentDefinitions();
 	const names = definitions.map((agent) => agent.name);
-	const readOnly = new Set(definitions.filter((agent) => !agent.tools.includes("write")).map((a) => a.name));
+	const readOnly = new Set(definitions.filter((agent) => !writes(agent)).map((agent) => agent.name));
 
 	const sessionModelRef = () => (session?.model ? qualify(session.model) : undefined);
 
@@ -118,12 +119,7 @@ export function registerTask(pi: ExtensionAPI, thresholds: Thresholds, agents: A
 	 * child to a model that has since stopped working.
 	 */
 	const chooseModel = (definition: AgentDefinition) =>
-		resolveAgentModel(
-			definition,
-			{ model: agents.models[definition.name], thinking: agents.thinking[definition.name] },
-			session?.modelRegistry?.getAvailable() ?? [],
-			session?.model,
-		);
+		resolveAgentModel(definition, session?.modelRegistry?.getAvailable() ?? [], session?.model);
 
 	let session: ExtensionContext | undefined;
 	let active: AgentRun[] = [];

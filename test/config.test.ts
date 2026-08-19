@@ -20,6 +20,8 @@ function configFile(contents: string): string {
 }
 
 describe("configPath", () => {
+	// Everything this pack keeps on disk lives in one directory, so an agent
+	// override sits beside the config that used to hold the same settings.
 	test("lives in the hypr directory inside pi's config folder", () => {
 		assert.match(configPath(), /[/\\]hypr[/\\]config\.json$/);
 	});
@@ -29,7 +31,7 @@ describe("loadConfig", () => {
 	test("a missing file gives defaults rather than throwing", () => {
 		const config = loadConfig(join(tmpdir(), "hyprsh-does-not-exist", "config.json"));
 		assert.equal(config.features.task, true);
-		assert.deepEqual(config.agents.models, {});
+		assert.equal(config.thinking.mode, "summary");
 	});
 
 	test("malformed JSON gives defaults rather than throwing", () => {
@@ -37,47 +39,23 @@ describe("loadConfig", () => {
 		assert.equal(config.features.task, true);
 	});
 
-	test("reads per-agent model overrides", () => {
-		const config = loadConfig(configFile(JSON.stringify({ agents: { models: { scout: "haiku" } } })));
-		assert.deepEqual(config.agents.models, { scout: "haiku" });
+	test("reads the thinking mode", () => {
+		const config = loadConfig(configFile(JSON.stringify({ thinking: { mode: "full" } })));
+		assert.equal(config.thinking.mode, "full");
 	});
 
-	test("trims an override and drops one that is only whitespace", () => {
-		const config = loadConfig(
-			configFile(JSON.stringify({ agents: { models: { scout: "  haiku  ", worker: "   " } } })),
-		);
-		assert.deepEqual(config.agents.models, { scout: "haiku" });
+	test("a thinking mode outside the set falls back to the default", () => {
+		const config = loadConfig(configFile(JSON.stringify({ thinking: { mode: "loud" } })));
+		assert.equal(config.thinking.mode, "summary");
 	});
 
-	test("a non-string override is dropped, keeping the valid ones", () => {
-		const config = loadConfig(
-			configFile(JSON.stringify({ agents: { models: { scout: 42, reviewer: "sonnet" } } })),
-		);
-		assert.deepEqual(config.agents.models, { reviewer: "sonnet" });
-	});
-
-	test("agents given as the wrong type falls back to no overrides", () => {
-		const config = loadConfig(configFile(JSON.stringify({ agents: "cheap please" })));
-		assert.deepEqual(config.agents.models, {});
-		assert.deepEqual(config.agents.thinking, {});
-	});
-
-	test("reads a per-agent thinking level", () => {
-		const config = loadConfig(configFile(JSON.stringify({ agents: { thinking: { scout: "low" } } })));
-		assert.deepEqual(config.agents.thinking, { scout: "low" });
-	});
-
-	// A level pi does not know would be rejected by the child at startup, so a
-	// typo here would kill every scout rather than degrade one.
-	test("a thinking level outside pi's own set is dropped, not passed on", () => {
-		const config = loadConfig(
-			configFile(JSON.stringify({ agents: { thinking: { scout: "very-hard", reviewer: "max" } } })),
-		);
-		assert.deepEqual(config.agents.thinking, { reviewer: "max" });
+	test("a feature switch of the wrong type keeps the default", () => {
+		const config = loadConfig(configFile(JSON.stringify({ features: { task: "no" } })));
+		assert.equal(config.features.task, true);
 	});
 
 	test("an unrelated key does not disturb the rest of the config", () => {
-		const config = loadConfig(configFile(JSON.stringify({ agents: { models: { scout: "haiku" } } })));
+		const config = loadConfig(configFile(JSON.stringify({ agents: { scout: "haiku" } })));
 		assert.equal(config.features.footer, true);
 		assert.equal(config.footer.thresholds.warning, 70);
 	});
