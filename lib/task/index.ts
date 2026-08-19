@@ -120,7 +120,7 @@ export function registerTask(pi: ExtensionAPI, thresholds: Thresholds, agents: A
 	const chooseModel = (definition: AgentDefinition) =>
 		resolveAgentModel(
 			definition,
-			agents.models[definition.name],
+			{ model: agents.models[definition.name], thinking: agents.thinking[definition.name] },
 			session?.modelRegistry?.getAvailable() ?? [],
 			session?.model,
 		);
@@ -226,7 +226,7 @@ export function registerTask(pi: ExtensionAPI, thresholds: Thresholds, agents: A
 									cwd: session?.cwd ?? process.cwd(),
 									model: ref ? qualify(ref) : undefined,
 									ignoredModel: choice.ignored,
-									thinkingLevel: choice.inheritThinking ? session?.thinkingLevel : undefined,
+									thinkingLevel: choice.inheritThinking ? session?.thinkingLevel : choice.thinking,
 									signal,
 									onProgress: requestRender,
 								});

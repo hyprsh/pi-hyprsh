@@ -8,6 +8,7 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { isThinkingLevel, type ThinkingLevel } from "./agents/model.ts";
 
 export interface FooterSegments {
 	cwd: boolean;
@@ -34,12 +35,16 @@ export interface ThinkingConfig {
 }
 
 /**
- * Per-agent model overrides, keyed by agent name. An ID the registry does not
- * report as available is ignored rather than fatal, so a config written for one
- * provider does not break every dispatch on another.
+ * Per-agent overrides, keyed by agent name.
+ *
+ * A model ID the registry does not report as available is ignored rather than
+ * fatal, so a config written for one provider does not break every dispatch on
+ * another. A thinking level outside pi's own set is dropped here, since the
+ * child would refuse it at startup and die for a typo.
  */
 export interface AgentsConfig {
 	models: Record<string, string>;
+	thinking: Record<string, ThinkingLevel>;
 }
 
 export interface Config {
@@ -89,6 +94,7 @@ const DEFAULTS: Config = {
 	},
 	agents: {
 		models: {},
+		thinking: {},
 	},
 };
 
@@ -116,6 +122,14 @@ function stringMap(value: unknown): Record<string, string> {
 	const out: Record<string, string> = {};
 	for (const [key, entry] of Object.entries(raw)) {
 		if (typeof entry === "string" && entry.trim()) out[key] = entry.trim();
+	}
+	return out;
+}
+
+function thinkingMap(value: unknown): Record<string, ThinkingLevel> {
+	const out: Record<string, ThinkingLevel> = {};
+	for (const [key, entry] of Object.entries(stringMap(value))) {
+		if (isThinkingLevel(entry)) out[key] = entry;
 	}
 	return out;
 }
@@ -180,6 +194,7 @@ export function loadConfig(path = configPath()): Config {
 		},
 		agents: {
 			models: stringMap(agents.models),
+			thinking: thinkingMap(agents.thinking),
 		},
 	};
 }

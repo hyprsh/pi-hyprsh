@@ -58,8 +58,17 @@ unavailable is dropped in favour of inheriting, so a config written for one
 provider cannot break dispatch on another.
 
 `scout` declares `tier: cheap`; `reviewer` and `worker` deliberately do not.
-A child that does not inherit the model no longer inherits the thinking level
-either, since `high` may not exist on the cheaper model.
+
+How hard an agent thinks is a separate axis, declared in its own frontmatter
+(`thinking: low` on `scout`) and overridable with `agents.thinking`. It is not
+derived from the model being cheap: the two are independent, and tying them
+would have been a layer with nothing in it.
+
+Stating the level is what matters. A live dispatch showed the first cut was
+wrong: omitting `--thinking` does not give the model's own default, it gives
+the user's global `defaultThinkingLevel`. The scout ran on `claude-haiku-4-5`
+and still reasoned at `high`, spending the saving straight back. Found only
+because the child was asked to report its own `PI_*` environment.
 
 Measured on an `anthropic/claude-opus-5` session: the tier picks
 `claude-haiku-4-5`, which is 5× cheaper on both input and output. A direct

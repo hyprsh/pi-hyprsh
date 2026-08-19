@@ -42,6 +42,14 @@ export interface AgentModelRequest {
 	/** Explicit model from the agent definition's frontmatter. */
 	model?: string;
 	tier?: AgentTier;
+	/**
+	 * How hard this agent should think, from its own frontmatter.
+	 *
+	 * Independent of which model it runs on: recon wants a short leash whether it
+	 * is on the cheapest model or the parent's. Left unset, the child gets the
+	 * user's global `defaultThinkingLevel`, which is pi's own behaviour.
+	 */
+	thinking?: ThinkingLevel;
 }
 
 /** Provider and ID together, because an ID alone does not identify a model. */
@@ -55,13 +63,27 @@ export function qualify(model: ModelRef): string {
 	return `${model.provider}/${model.id}`;
 }
 
+/** pi's own set; anything outside it would be rejected by the child at startup. */
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+export function isThinkingLevel(value: unknown): value is ThinkingLevel {
+	return typeof value === "string" && (THINKING_LEVELS as readonly string[]).includes(value);
+}
+
+/** Per-agent overrides from pi-hyprsh.json. Both are checked before use, never trusted. */
+export interface AgentOverride {
+	model?: string;
+	thinking?: ThinkingLevel;
+}
+
 export interface Resolution {
 	/** `undefined` means inherit the dispatching session's model. */
 	model?: ModelRef;
-	/**
-	 * Thinking level is only inherited by a child that also inherited the model:
-	 * a cheap model's thinking levels are its own, and `high` may not exist there.
-	 */
+	/** An explicit level to pass, from config or the agent's own definition. */
+	thinking?: ThinkingLevel;
+	/** True when the child follows the session for both model and thinking level. */
 	inheritThinking: boolean;
 	/** A model was asked for by name and could not be used. Worth showing, never worth failing over. */
 	ignored?: string;
@@ -90,29 +112,38 @@ function cheapest(available: readonly ModelChoice[], provider: string): ModelCho
 
 export function resolveAgentModel(
 	request: AgentModelRequest,
-	configured: string | undefined,
+	override: AgentOverride | undefined,
 	available: readonly ModelChoice[],
 	session: { id?: string; provider?: string } | undefined,
 ): Resolution {
-	const requested = configured?.trim() || request.model?.trim();
+	// Applies whatever the model turns out to be, including a child that inherits
+	// it: how hard to think and which model to think with are separate questions.
+	const thinking = override?.thinking ?? request.thinking;
+	const withThinking = (resolution: Resolution): Resolution =>
+		thinking ? { ...resolution, thinking, inheritThinking: false } : resolution;
+
+	const requested = override?.model?.trim() || request.model?.trim();
 	if (requested) {
 		// `provider/id` is accepted as well as a bare ID, so a user who has already
 		// hit the ambiguity can spell their way out of it in config.
 		const match = available.find((model) => model.id === requested || qualify(model) === requested);
-		if (!match) return { ...INHERIT, ignored: requested };
-		return {
+		if (!match) return withThinking({ ...INHERIT, ignored: requested });
+		return withThinking({
 			model: { id: match.id, provider: match.provider },
 			inheritThinking: match.id === session?.id && match.provider === session?.provider,
-		};
+		});
 	}
 
 	if (request.tier === "cheap" && session?.provider) {
 		const pick = cheapest(available, session.provider);
 		// Already on the cheapest model: inherit, so the session's thinking level survives.
 		if (pick && pick.id !== session.id) {
-			return { model: { id: pick.id, provider: pick.provider }, inheritThinking: false };
+			return withThinking({
+				model: { id: pick.id, provider: pick.provider },
+				inheritThinking: false,
+			});
 		}
 	}
 
-	return INHERIT;
+	return withThinking(INHERIT);
 }

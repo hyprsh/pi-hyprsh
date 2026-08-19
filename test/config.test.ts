@@ -53,6 +53,21 @@ describe("loadConfig", () => {
 	test("agents given as the wrong type falls back to no overrides", () => {
 		const config = loadConfig(configFile(JSON.stringify({ agents: "cheap please" })));
 		assert.deepEqual(config.agents.models, {});
+		assert.deepEqual(config.agents.thinking, {});
+	});
+
+	test("reads a per-agent thinking level", () => {
+		const config = loadConfig(configFile(JSON.stringify({ agents: { thinking: { scout: "low" } } })));
+		assert.deepEqual(config.agents.thinking, { scout: "low" });
+	});
+
+	// A level pi does not know would be rejected by the child at startup, so a
+	// typo here would kill every scout rather than degrade one.
+	test("a thinking level outside pi's own set is dropped, not passed on", () => {
+		const config = loadConfig(
+			configFile(JSON.stringify({ agents: { thinking: { scout: "very-hard", reviewer: "max" } } })),
+		);
+		assert.deepEqual(config.agents.thinking, { reviewer: "max" });
 	});
 
 	test("an unrelated key does not disturb the rest of the config", () => {

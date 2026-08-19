@@ -58,42 +58,42 @@ describe("resolveAgentModel", () => {
 	});
 
 	test("config beats the definition's own model", () => {
-		const choice = resolveAgentModel({ model: "sonnet" }, "haiku", CATALOGUE, SESSION);
+		const choice = resolveAgentModel({ model: "sonnet" }, { model: "haiku" }, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "haiku", provider: "anthropic" });
 	});
 
 	test("config beats the tier", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, "sonnet", CATALOGUE, SESSION);
+		const choice = resolveAgentModel({ tier: "cheap" }, { model: "sonnet" }, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "sonnet", provider: "anthropic" });
 	});
 
 	test("an unavailable configured model falls back to inheriting and says so", () => {
-		const choice = resolveAgentModel({}, "gpt-9", CATALOGUE, SESSION);
+		const choice = resolveAgentModel({}, { model: "gpt-9" }, CATALOGUE, SESSION);
 		assert.equal(choice.model, undefined);
 		assert.equal(choice.inheritThinking, true);
 		assert.equal(choice.ignored, "gpt-9");
 	});
 
 	test("an unavailable configured model does not silently fall through to the tier", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, "gpt-9", CATALOGUE, SESSION);
+		const choice = resolveAgentModel({ tier: "cheap" }, { model: "gpt-9" }, CATALOGUE, SESSION);
 		assert.equal(choice.model, undefined, "a typo must not be answered with a surprise model");
 		assert.equal(choice.ignored, "gpt-9");
 	});
 
 	test("a configured model on another provider is used when it is genuinely available", () => {
-		const choice = resolveAgentModel({}, "grok-cheap", CATALOGUE, SESSION);
+		const choice = resolveAgentModel({}, { model: "grok-cheap" }, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "grok-cheap", provider: "xai" });
 		assert.equal(choice.ignored, undefined);
 	});
 
 	test("asking for the model already in use inherits its thinking level", () => {
-		const choice = resolveAgentModel({}, "opus", CATALOGUE, SESSION);
+		const choice = resolveAgentModel({}, { model: "opus" }, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "opus", provider: "anthropic" });
 		assert.equal(choice.inheritThinking, true);
 	});
 
 	test("whitespace-only config is not a request", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, "   ", CATALOGUE, SESSION);
+		const choice = resolveAgentModel({ tier: "cheap" }, { model: "   " }, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "haiku", provider: "anthropic" });
 		assert.equal(choice.ignored, undefined);
 	});
@@ -111,18 +111,57 @@ describe("resolveAgentModel", () => {
 	});
 
 	test("a provider-qualified config entry is accepted", () => {
-		const choice = resolveAgentModel({}, "xai/grok-cheap", CATALOGUE, SESSION);
+		const choice = resolveAgentModel({}, { model: "xai/grok-cheap" }, CATALOGUE, SESSION);
 		assert.deepEqual(choice.model, { id: "grok-cheap", provider: "xai" });
 	});
 
 	test("a qualified entry naming the wrong provider is not accepted", () => {
-		const choice = resolveAgentModel({}, "anthropic/grok-cheap", CATALOGUE, SESSION);
+		const choice = resolveAgentModel({}, { model: "anthropic/grok-cheap" }, CATALOGUE, SESSION);
 		assert.equal(choice.model, undefined);
 		assert.equal(choice.ignored, "anthropic/grok-cheap");
 	});
 
+	// Omitting --thinking gives the user's global defaultThinkingLevel, not the
+	// model's own, so an agent that wants a short leash has to say so. The two
+	// axes are independent: a cheap model does not imply cheap thinking.
+	test("an agent's declared thinking level is passed through", () => {
+		const choice = resolveAgentModel({ thinking: "low" }, undefined, CATALOGUE, SESSION);
+		assert.equal(choice.thinking, "low");
+		assert.equal(choice.inheritThinking, false);
+	});
+
+	test("a cheap tier says nothing about thinking on its own", () => {
+		const choice = resolveAgentModel({ tier: "cheap" }, undefined, CATALOGUE, SESSION);
+		assert.deepEqual(choice.model, { id: "haiku", provider: "anthropic" });
+		assert.equal(choice.thinking, undefined);
+	});
+
+	test("config overrides the level the agent declared", () => {
+		const choice = resolveAgentModel(
+			{ tier: "cheap", thinking: "low" },
+			{ thinking: "medium" },
+			CATALOGUE,
+			SESSION,
+		);
+		assert.deepEqual(choice.model, { id: "haiku", provider: "anthropic" });
+		assert.equal(choice.thinking, "medium");
+	});
+
+	test("thinking can be configured without touching the model", () => {
+		const choice = resolveAgentModel({}, { thinking: "off" }, CATALOGUE, SESSION);
+		assert.equal(choice.model, undefined, "the child still inherits the session's model");
+		assert.equal(choice.thinking, "off");
+		assert.equal(choice.inheritThinking, false);
+	});
+
+	test("a configured level survives a model that had to be dropped", () => {
+		const choice = resolveAgentModel({}, { model: "gpt-9", thinking: "low" }, CATALOGUE, SESSION);
+		assert.equal(choice.ignored, "gpt-9");
+		assert.equal(choice.thinking, "low");
+	});
+
 	test("an empty catalogue inherits rather than throwing", () => {
-		const choice = resolveAgentModel({ tier: "cheap" }, "haiku", [], SESSION);
+		const choice = resolveAgentModel({ tier: "cheap" }, { model: "haiku" }, [], SESSION);
 		assert.equal(choice.model, undefined);
 	});
 
