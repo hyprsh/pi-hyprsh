@@ -23,7 +23,7 @@ Only one extension may own the footer. `web_search` / `web_fetch` collide with `
 
 | Feature | What you get |
 |---|---|
-| **Footer** | One line: cwd, model:thinking, tokens/s, context %, and subscription quota per window with a live reset countdown. Anthropic, OpenAI Codex and xAI are read from your existing sign-in. Percentages turn amber at 70 and bold red at 90. |
+| **Footer** | One line: cwd, model:thinking, tokens/s, context %, and subscription quota per window with a live reset countdown. On a narrow terminal the line wraps at segment boundaries rather than losing its tail. Anthropic, OpenAI Codex and xAI are read from your existing sign-in. Percentages turn amber at 70 and bold red at 90. |
 | **Reason** | Every built-in tool takes a required `reasoning` argument, rendered as one line above the call. Result rendering, diffs and `ctrl+o` stay native. |
 | **Compact** | Every tool this pack registers renders its own frame instead of pi's padded box, dropping the two blank lines around each call — a read is three lines: separator, reason, call. The one-column indent and the pending/success/error tint are kept, and the call line ends in how long the call took (`0.2s`). |
 | **Context** | `/context` shows what occupies the model context as a proportional map; `/context injections` shows the hidden parts — base prompt, tool definitions, skills, memory files, extension additions — as a previewable tree. `↑↓`/`jk` to move, `Enter` to preview, `Z` to zoom the map, `Esc`/`q` to close. |

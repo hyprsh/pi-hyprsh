@@ -1,13 +1,14 @@
 /**
- * Single-line footer.
+ * Status footer.
  *
- * Pi's setFooter contract returns an array of lines; this feature always
- * returns exactly one, so the footer never grows past a single row.
+ * One line whenever the segments fit. On a narrow terminal the line wraps at
+ * segment boundaries instead of being cut off, so nothing but an oversized
+ * single segment is ever lost.
  */
 
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { FooterConfig } from "../config.ts";
 import { fetchQuota, type QuotaSnapshot } from "../quota/index.ts";
 import { contextSegment, cwdSegment, modelSegment, quotaSegment, tpsSegment } from "./segments.ts";
@@ -17,6 +18,36 @@ const RESET_RENDER_MS = 1_000;
 const SEPARATOR = " · ";
 /** Below this, a live rate is noise rather than a measurement. */
 const MIN_LIVE_MS = 500;
+
+/**
+ * Pack segments into as few lines as the width allows, breaking only between
+ * segments. A segment wider than the terminal is truncated, since splitting it
+ * mid-value would print a number that reads as a different number.
+ */
+function layoutSegments(parts: readonly string[], separator: string, width: number): string[] {
+	const separatorWidth = visibleWidth(separator);
+	const lines: string[] = [];
+	let line = "";
+	let lineWidth = 0;
+
+	for (const part of parts) {
+		const partWidth = visibleWidth(part);
+		if (line === "") {
+			line = part;
+			lineWidth = partWidth;
+		} else if (lineWidth + separatorWidth + partWidth <= width) {
+			line += separator + part;
+			lineWidth += separatorWidth + partWidth;
+		} else {
+			lines.push(line);
+			line = part;
+			lineWidth = partWidth;
+		}
+	}
+	if (line !== "") lines.push(line);
+
+	return lines.map((entry) => truncateToWidth(entry, width));
+}
 
 export function registerFooter(pi: ExtensionAPI, config: FooterConfig): void {
 	let quota: QuotaSnapshot | null = null;
@@ -68,8 +99,7 @@ export function registerFooter(pi: ExtensionAPI, config: FooterConfig): void {
 					}
 					if (config.segments.quota) parts.push(quotaSegment(quota, config.thresholds, theme));
 
-					const line = parts.filter(Boolean).join(theme.fg("dim", SEPARATOR));
-					return line ? [truncateToWidth(line, width)] : [];
+					return layoutSegments(parts.filter(Boolean), theme.fg("dim", SEPARATOR), width);
 				},
 			};
 		});
