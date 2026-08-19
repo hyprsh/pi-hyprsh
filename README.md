@@ -29,7 +29,7 @@ Only one extension may own the footer. `web_search` / `web_fetch` collide with `
 | **Reason** | Every built-in tool, plus `web_search`, `web_fetch` and `ask_user_question`, takes a required `reasoning` argument, stripped again before the call runs. Execution, result rendering, diffs and `ctrl+o` stay native. `todo` is exempt: the list itself says what it is for. |
 | **Compact** | Every tool this pack registers renders its own frame instead of pi's padded box, dropping the two blank lines around each call — a read is two lines: header, call. Above the call sits one header line, `[bash] Confirm the editor is free -> 0.3s done`: tool name, reason, and state — `-> running` while `execute` is in flight, `-> 0.3s done` or `-> 0.3s error` once it returns, nothing at all for a call replayed from a session, which never ran here. The one-column indent and the pending/success/error tint are kept, and bash's own `Took 0.3s` trailer is dropped since the header already carries it. |
 | **Context** | `/context` shows what occupies the model context as a proportional map; `/context injections` shows the hidden parts — base prompt, tool definitions, skills, memory files, extension additions — as a previewable tree. `↑↓`/`jk` to move, `Enter` to preview, `Z` to zoom the map, `Esc`/`q` to close. |
-| **Web** | `web_search` across OpenAI, xAI, Exa and SearXNG, and `web_fetch` with Readability/PDF extraction and SSRF checks. Raw provider results, no model-written answers, nothing persisted. Every provider is free at the point of use: two ride subscriptions you already hold, Exa is its keyless endpoint, SearXNG is your own instance. No metered search API is called, so no fan-out can run up a bill. |
+| **Web** | `web_search` across OpenAI, xAI, Brave, SearXNG and Exa, and `web_fetch` with Readability/PDF extraction and SSRF checks. Raw provider results, no model-written answers, nothing persisted. Every provider is free at the point of use: two ride subscriptions you already hold, Brave is its free tier, SearXNG is your own instance, Exa is its keyless endpoint. Nothing here bills per query, so a wide fan-out cannot run up a bill. |
 | **Ask** | `ask_user_question` puts up to four questions to you with 2-4 written-out options each — the recommended one first and labelled `(recommended)` — a free-text row and optional multi-select, instead of the model guessing. Multi-question runs are prefixed `[1/3]` so you see where you are. Built on pi's own dialogs, so it works in TUI and RPC hosts. |
 | **Thinking** | A middle ground between pi's `hideThinkingBlock` on and off: once a thinking block is finished it collapses to one line per thought — bold section headers kept whole, every other paragraph reduced to its opening sentence, list items one line each, capped at 12 lines with a `… 8 more lines` marker. Streaming reasoning is left untouched so you can still watch it live. Display-only: the full text stays in the session and in model context. Set `"thinking": { "mode": "full" }` to turn it off. |
 | **Todo** | A `todo` tool the model calls with the whole task list, a panel above the editor showing progress as `Todos (2/7)` with ✔ ▶ ○ ⊘ rows, and `/todos` to print the list. Each result carries the post-call snapshot and the list is replayed from the session branch, so it survives `/reload`, forks and compaction with no disk writes. A step the model decides against stays in the list as `skipped` and must carry a reason, so a plan cannot quietly lose work. The panel caps at 12 lines — settled rows are dropped first — and disappears once everything is done. |
@@ -37,7 +37,7 @@ Only one extension may own the footer. `web_search` / `web_fetch` collide with `
 | **Constitution** | [`lib/constitution/AGENTS.md`](lib/constitution/AGENTS.md) — truthfulness, safety, and the rules against claiming unverified work or weakening a check — appended to the system prompt each turn. Only what must never be one file read away from being skipped: 478 tokens always on, down from 755 before the method moved into the skill. Delete a duplicate `~/.pi/agent/AGENTS.md` or the rules are sent twice. |
 | **Skill** | [`skills/hyprsh-mode`](skills/hyprsh-mode) — the working method, loaded on demand. One skill carrying an inline index: five playbooks (investigation, bug fix, feature, refactoring, prototype) and fourteen principles across craft, architecture, verification and delegation, each indexed by one line naming when it applies. The full text sits in leaf files read only when a principle fires, so roughly 5,300 tokens of guidance costs 74 tokens of always-on description. Playbook steps are copied into the todo list verbatim, and a step you decline stays there as `skipped` with its reason. |
 
-Web search works with nothing configured: Exa's keyless endpoint is the fallback. A Codex or SuperGrok subscription is used before it.
+Web search works with nothing configured: Exa's keyless endpoint is the last resort. A Codex or SuperGrok subscription is tried first, then Brave, which measures best on independent agent-search benchmarks for both relevance and latency but has a finite free allowance, then your own SearXNG.
 
 ## Configuration
 
@@ -53,11 +53,12 @@ Web search works with nothing configured: Exa's keyless endpoint is the fallback
   },
   "web": {
     "search": {
-      "priority": ["openai", "xai", "exa", "searxng"],
+      "priority": ["openai", "xai", "brave", "searxng", "exa"],
       "timeoutMs": 60000,
       "deadlineMs": 15000,
       "cacheTtlMs": 300000,
       "retries": 2,
+      "braveApiKey": "$BRAVE_API_KEY",
       "searxngBaseUrl": "http://searx.lan:8080"
     },
     "fetch": {
@@ -80,6 +81,7 @@ A missing or malformed file falls back to defaults. The `web` section is validat
 |---|---|
 | `openai` | Codex sign-in via `/login`, else `OPENAI_API_KEY` |
 | `xai` | SuperGrok / X Premium sign-in, else `XAI_API_KEY` |
+| `brave` | `BRAVE_API_KEY`, or `web.search.braveApiKey`; the free tier is enough for normal use |
 | `exa` | none; the keyless endpoint is rate limited when busy |
 | `searxng` | `SEARXNG_BASE_URL` |
 
