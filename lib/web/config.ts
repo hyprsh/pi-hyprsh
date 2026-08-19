@@ -14,9 +14,18 @@
 import { readFileSync } from "node:fs";
 import { configPath } from "../config.ts";
 
-export type SearchProviderId = "openai" | "xai" | "exa" | "brave" | "searxng";
+/**
+ * Providers this pack talks to.
+ *
+ * The set is deliberately limited to what costs nothing beyond a subscription
+ * you already hold: `openai` and `xai` ride the Codex and SuperGrok sign-ins,
+ * `exa` uses its keyless endpoint, and `searxng` is whatever instance you run.
+ * Metered search APIs are out of scope, so there is no key to leak and no bill
+ * a runaway fan-out can build up.
+ */
+export type SearchProviderId = "openai" | "xai" | "exa" | "searxng";
 
-export const SEARCH_PROVIDER_IDS: SearchProviderId[] = ["openai", "xai", "exa", "brave", "searxng"];
+export const SEARCH_PROVIDER_IDS: SearchProviderId[] = ["openai", "xai", "exa", "searxng"];
 
 export interface WebSearchConfig {
 	/** Order tried by provider "auto"; the first available provider that answers wins. */
@@ -34,8 +43,6 @@ export interface WebSearchConfig {
 	openaiModel?: string;
 	xaiApiKey?: string;
 	xaiModel?: string;
-	exaApiKey?: string;
-	braveApiKey?: string;
 	searxngBaseUrl?: string;
 }
 
@@ -58,7 +65,7 @@ export interface WebConfig {
 }
 
 const DEFAULT_SEARCH: WebSearchConfig = {
-	priority: ["openai", "xai", "exa", "brave", "searxng"],
+	priority: ["openai", "xai", "exa", "searxng"],
 	timeoutMs: 60_000,
 	deadlineMs: 15_000,
 	cacheTtlMs: 300_000,
@@ -166,8 +173,6 @@ function parse(raw: Record<string, unknown>, path: string): WebConfig {
 			openaiModel: text(search.openaiModel, "web.search.openaiModel", path),
 			xaiApiKey: secret(search.xaiApiKey, "web.search.xaiApiKey", path, "XAI_API_KEY"),
 			xaiModel: text(search.xaiModel, "web.search.xaiModel", path),
-			exaApiKey: secret(search.exaApiKey, "web.search.exaApiKey", path, "EXA_API_KEY"),
-			braveApiKey: secret(search.braveApiKey, "web.search.braveApiKey", path, "BRAVE_API_KEY"),
 			searxngBaseUrl: httpUrl(search.searxngBaseUrl, "web.search.searxngBaseUrl", path, "SEARXNG_BASE_URL"),
 		},
 		fetch: {

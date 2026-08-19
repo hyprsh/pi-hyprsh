@@ -1,12 +1,12 @@
 /**
- * Exa search, with and without a key.
+ * Exa search, keyless.
  *
- * With `exaApiKey` this calls Exa's own /search endpoint. Without one it calls
- * Exa's hosted, unauthenticated MCP endpoint, which exposes the same search
- * behind a JSON-RPC tool call. Keyless is rate limited and answers 429 when it
- * is busy, so a key is still better — but the provider is usable with nothing
- * configured at all, which makes it the deterministic fallback when a
- * subscription-backed provider fails.
+ * Exa's hosted, unauthenticated MCP endpoint exposes search behind a JSON-RPC
+ * tool call. It is rate limited and answers 429 when busy, which is the price
+ * of needing nothing configured at all — and that is what makes it the
+ * deterministic fallback when a subscription-backed provider fails. The metered
+ * /search endpoint is deliberately not used: this pack sends no request that
+ * bills a per-query API.
  */
 
 import { apiFetch, HttpError } from "../http.ts";
@@ -20,7 +20,6 @@ import {
 	toIsoDate,
 } from "./types.ts";
 
-const EXA_SEARCH_URL = "https://api.exa.ai/search";
 const EXA_MCP_URL = "https://mcp.exa.ai/mcp";
 const MCP_ADVANCED_TOOL = "web_search_advanced_exa";
 const MCP_BASIC_TOOL = "web_search_exa";
@@ -61,32 +60,6 @@ function toResults(results: ExaResult[], request: SearchRequest): SearchResult[]
 	return mapped.slice(0, request.limit);
 }
 
-async function searchWithKey(
-	apiKey: string,
-	request: SearchRequest,
-	timeoutMs: number,
-	signal?: AbortSignal,
-) {
-	const body = await apiFetch(EXA_SEARCH_URL, {
-		method: "POST",
-		headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-		body: JSON.stringify({
-			...searchArgs(request),
-			type: "auto",
-			contents: { text: { maxCharacters: 600 } },
-		}),
-		timeoutMs,
-		signal,
-		label: "Exa search",
-	});
-
-	try {
-		return (JSON.parse(body) as { results?: ExaResult[] }).results ?? [];
-	} catch {
-		throw new Error("Exa search returned invalid JSON");
-	}
-}
-
 /** One JSON-RPC tool call over the hosted MCP endpoint; the reply is an SSE frame. */
 async function callMcp(
 	tool: string,
@@ -111,10 +84,7 @@ async function callMcp(
 		});
 	} catch (error) {
 		if (error instanceof HttpError && error.status === 429) {
-			throw new HttpError(
-				429,
-				"Keyless Exa search is rate limited. Set EXA_API_KEY or web.search.exaApiKey for unthrottled access.",
-			);
+			throw new HttpError(429, "Exa's keyless endpoint is rate limited right now. Try another provider.");
 		}
 		throw error;
 	}
@@ -165,7 +135,7 @@ function parseTextBlocks(text: string): ExaResult[] {
 	return results;
 }
 
-async function searchKeyless(
+async function searchExa(
 	request: SearchRequest,
 	timeoutMs: number,
 	signal?: AbortSignal,
@@ -196,16 +166,12 @@ export const exaProvider: SearchProvider = {
 	id: "exa",
 	label: "Exa",
 
-	/** Keyless MCP access means Exa is always usable, with or without a key. */
+	/** Needs no credential, so it is the one provider that is always usable. */
 	async isAvailable() {
 		return true;
 	},
 
 	async search(request, env) {
-		const apiKey = env.config.exaApiKey;
-		const results = apiKey
-			? await searchWithKey(apiKey, request, env.config.timeoutMs, env.signal)
-			: await searchKeyless(request, env.config.timeoutMs, env.signal);
-		return toResults(results, request);
+		return toResults(await searchExa(request, env.config.timeoutMs, env.signal), request);
 	},
 };

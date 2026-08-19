@@ -29,14 +29,14 @@ Only one extension may own the footer. `web_search` / `web_fetch` collide with `
 | **Reason** | Every built-in tool, plus `web_search`, `web_fetch` and `ask_user_question`, takes a required `reasoning` argument, stripped again before the call runs. Execution, result rendering, diffs and `ctrl+o` stay native. `todo` is exempt: the list itself says what it is for. |
 | **Compact** | Every tool this pack registers renders its own frame instead of pi's padded box, dropping the two blank lines around each call — a read is two lines: header, call. Above the call sits one header line, `[bash] Confirm the editor is free -> 0.3s done`: tool name, reason, and state — `-> running` while `execute` is in flight, `-> 0.3s done` or `-> 0.3s error` once it returns, nothing at all for a call replayed from a session, which never ran here. The one-column indent and the pending/success/error tint are kept, and bash's own `Took 0.3s` trailer is dropped since the header already carries it. |
 | **Context** | `/context` shows what occupies the model context as a proportional map; `/context injections` shows the hidden parts — base prompt, tool definitions, skills, memory files, extension additions — as a previewable tree. `↑↓`/`jk` to move, `Enter` to preview, `Z` to zoom the map, `Esc`/`q` to close. |
-| **Web** | `web_search` across OpenAI, xAI, Exa, Brave and SearXNG, and `web_fetch` with Readability/PDF extraction and SSRF checks. Raw provider results, no model-written answers, nothing persisted. |
+| **Web** | `web_search` across OpenAI, xAI, Exa and SearXNG, and `web_fetch` with Readability/PDF extraction and SSRF checks. Raw provider results, no model-written answers, nothing persisted. Every provider is free at the point of use: two ride subscriptions you already hold, Exa is its keyless endpoint, SearXNG is your own instance. No metered search API is called, so no fan-out can run up a bill. |
 | **Ask** | `ask_user_question` puts up to four questions to you with 2-4 written-out options each — the recommended one first and labelled `(recommended)` — a free-text row and optional multi-select, instead of the model guessing. Multi-question runs are prefixed `[1/3]` so you see where you are. Built on pi's own dialogs, so it works in TUI and RPC hosts. |
 | **Thinking** | A middle ground between pi's `hideThinkingBlock` on and off: once a thinking block is finished it collapses to one line per thought — bold section headers kept whole, every other paragraph reduced to its opening sentence, list items one line each, capped at 12 lines with a `… 8 more lines` marker. Streaming reasoning is left untouched so you can still watch it live. Display-only: the full text stays in the session and in model context. Set `"thinking": { "mode": "full" }` to turn it off. |
 | **Todo** | A `todo` tool the model calls with the whole task list, a panel above the editor showing progress as `Todos (2/7)` with ✔ ▶ ○ ⊘ rows, and `/todos` to print the list. Each result carries the post-call snapshot and the list is replayed from the session branch, so it survives `/reload`, forks and compaction with no disk writes. A step the model decides against stays in the list as `skipped` and must carry a reason, so a plan cannot quietly lose work. The panel caps at 12 lines — settled rows are dropped first — and disappears once everything is done. |
 | **Task** | A `task` tool that delegates bounded work to child agents, each a separate pi process with its own context window. The brief is a schema rather than a convention: goal, context, acceptance criteria and verification commands are required fields, so an assignment a child could not act on alone cannot be sent, and the standing prohibitions — no nested delegation, no out-of-scope edits, no unverified completion — are added rather than asked for. Writable scope is a list of paths, so two units claiming the same file, or a writable path handed to a read-only agent, are rejected before anything spawns. Results put the child's verdict next to the files and commands the runtime observed from its tool calls, so a claim and the evidence for it can be seen to disagree. Fan-out is measured against your remaining subscription quota: refused past the critical threshold, serialised past the warning one. Bundled agents are `scout` (read-only recon), `reviewer` (read-only critique) and `worker` (bounded implementation). |
 | **Constitution** | [`lib/constitution/AGENTS.md`](lib/constitution/AGENTS.md) — truthfulness, safety, workflow, [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), design — appended to the system prompt each turn. Delete a duplicate `~/.pi/agent/AGENTS.md` or the rules are sent twice. |
 
-Web search works with nothing configured: Exa's keyless endpoint is the fallback. A Codex or SuperGrok subscription is used before any API key.
+Web search works with nothing configured: Exa's keyless endpoint is the fallback. A Codex or SuperGrok subscription is used before it.
 
 ## Configuration
 
@@ -52,13 +52,11 @@ Web search works with nothing configured: Exa's keyless endpoint is the fallback
   },
   "web": {
     "search": {
-      "priority": ["openai", "xai", "exa", "brave", "searxng"],
+      "priority": ["openai", "xai", "exa", "searxng"],
       "timeoutMs": 60000,
       "deadlineMs": 15000,
       "cacheTtlMs": 300000,
       "retries": 2,
-      "exaApiKey": "$EXA_API_KEY",
-      "braveApiKey": "...",
       "searxngBaseUrl": "http://searx.lan:8080"
     },
     "fetch": {
@@ -81,8 +79,7 @@ A missing or malformed file falls back to defaults. The `web` section is validat
 |---|---|
 | `openai` | Codex sign-in via `/login`, else `OPENAI_API_KEY` |
 | `xai` | SuperGrok / X Premium sign-in, else `XAI_API_KEY` |
-| `exa` | none, or `EXA_API_KEY` to lift the rate limit |
-| `brave` | `BRAVE_API_KEY` |
+| `exa` | none; the keyless endpoint is rate limited when busy |
 | `searxng` | `SEARXNG_BASE_URL` |
 
 Config values may be a literal or a `$VAR` / `${VAR}` reference; each also falls back to the environment variable above, so nothing has to be written to the file. Keys are sent as request headers only, never logged or cached, and a credentialed request never follows a redirect.

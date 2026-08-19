@@ -11,7 +11,6 @@
 import { TtlCache } from "../cache.ts";
 import type { SearchProviderId } from "../config.ts";
 import { withRetry } from "../http.ts";
-import { braveProvider } from "./brave.ts";
 import { exaProvider } from "./exa.ts";
 import { openaiProvider } from "./openai.ts";
 import { searxngProvider } from "./searxng.ts";
@@ -24,7 +23,6 @@ const PROVIDERS: Record<SearchProviderId, SearchProvider> = {
 	openai: openaiProvider,
 	xai: xaiProvider,
 	exa: exaProvider,
-	brave: braveProvider,
 	searxng: searxngProvider,
 };
 
@@ -160,7 +158,7 @@ export async function runSearch(
 	const providers = await availableProviders(env);
 	if (providers.length === 0) {
 		throw new Error(
-			"No search provider is configured. Sign in with /login for an OpenAI or xAI subscription, or set EXA_API_KEY, BRAVE_API_KEY or SEARXNG_BASE_URL.",
+			"No search provider answered. Exa's keyless endpoint needs no setup, so this means it is unreachable; sign in with /login for an OpenAI or xAI subscription, or set SEARXNG_BASE_URL.",
 		);
 	}
 
